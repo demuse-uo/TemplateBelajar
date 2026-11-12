@@ -3,7 +3,7 @@
    Kalau file website diubah, naikkan angka VERSI di bawah
    (misalnya v1 → v2) supaya semua HP mengambil versi terbaru.
    ============================================================ */
-const VERSI = "belajar-ujian-v4";
+const VERSI = "belajar-ujian-v5";
 
 const FILE_UTAMA = [
   "./template-belajar-ujian.html",

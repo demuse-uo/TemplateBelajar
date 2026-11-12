@@ -284,7 +284,7 @@ function parseSederhana(text) {
     }
   }
   out.modul = out.modul.filter((x) => x.judul || x.ringkasan || x.poin.length || x.istilah.length || x.soal.length || x.esai.length);
-  if (!out.modul.length) throw new Error("Belum ada materi yang terbaca. Pastikan catatanmu memakai judul seperti MODUL 1:, RINGKASAN:, dan SOAL:. Lihat contoh susunannya di bawah kotak.");
+  if (!out.modul.length) throw new Error("Belum ada materi yang terbaca. Pastikan catatan kalian memakai judul seperti MODUL 1:, RINGKASAN:, dan SOAL:. Lihat contoh susunannya di bawah kotak.");
   return out;
 }
 
@@ -572,7 +572,7 @@ document.querySelectorAll("[data-open-import]").forEach((b) => b.addEventListene
 
 $("contohSusunan").textContent = CONTOH_SUSUNAN;
 $("copyContoh").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(CONTOH_SUSUNAN); toast("✅ Contoh susunan tersalin. Ganti isinya dengan catatanmu."); }
+  try { await navigator.clipboard.writeText(CONTOH_SUSUNAN); toast("✅ Contoh susunan tersalin. Ganti isinya dengan catatan kalian."); }
   catch (e) { toast("Silakan tekan lama tulisan contohnya, lalu salin."); }
 });
 
@@ -766,7 +766,7 @@ $("saveImport").addEventListener("click", () => {
     return;
   }
   const text = $("pasteInput").value.trim();
-  if (!text) { showMsg("importMsg", "Kotaknya masih kosong. Tempel dulu catatanmu ya."); return; }
+  if (!text) { showMsg("importMsg", "Kotaknya masih kosong. Tempel dulu catatan kalian ya."); return; }
   tryImport(text);
 });
 window.addEventListener("dragover", (e) => e.preventDefault());
@@ -774,7 +774,7 @@ window.addEventListener("drop", (e) => e.preventDefault());
 
 $("tryExample").addEventListener("click", () => {
   saveNew(normalize(CONTOH));
-  toast("Ini contohnya. Tekan \"Tambah materi\" untuk memasukkan materimu sendiri.");
+  toast("Ini contohnya. Tekan \"Tambah materi\" untuk memasukkan materi kalian sendiri.");
 });
 
 /* ============================================================
@@ -987,7 +987,7 @@ function renderEsai() {
     <div class="card q-card">
       <div class="q-meta">ESAI ${i + 1} · MODUL ${esc(s.modul)}${s.dari ? `<span class="by">✍️ dari ${esc(s.dari)}</span>` : ""}</div>
       <p class="q-text">${esc(s.tanya)}</p>
-      <textarea placeholder="Tulis jawabanmu di sini..."></textarea>
+      <textarea placeholder="Tulis jawaban kalian di sini..."></textarea>
       <button class="btn primary" data-esai="${i}">Lihat contoh jawaban</button>
       <div class="esai-answer" id="esai-${i}">✅ ${esc(s.jawaban || "Belum ada contoh jawaban.")}</div>
       ${s.id ? `<div><button class="link-btn" data-lapor="${esc(s.id)}">⚠️ Laporkan soal salah</button></div>` : ""}
@@ -1049,7 +1049,7 @@ $("soalSend").addEventListener("click", async () => {
     jawaban = $("soalJawabEsai").value.trim();
     if (!jawaban) return showMsg("soalMsg", "Contoh jawabannya belum diisi.");
   }
-  if (!nama) return showMsg("soalMsg", "Nama kamu belum diisi.");
+  if (!nama) return showMsg("soalMsg", "Nama kalian belum diisi.");
   writeStore(NAMA_KEY, nama);
 
   const btn = $("soalSend");
@@ -1063,9 +1063,9 @@ $("soalSend").addEventListener("click", async () => {
       list.push({ id: res.id, tipe, nomorModul: nomor, tanya, pilihan, jawaban, pembahasan: body.pembahasan, nama });
       writeStore(temanKey(key), list);
       buildQuiz(); renderEsai();
-      toast("🎉 Terima kasih! Soalmu sudah bisa dipakai teman-teman.");
+      toast("🎉 Terima kasih! Soal kalian sudah bisa dipakai teman-teman.");
     } else {
-      toast("🎉 Terima kasih! Soalmu akan tampil setelah dicek admin.");
+      toast("🎉 Terima kasih! Soal kalian akan tampil setelah dicek admin.");
     }
     closeModal("soalModal");
   } catch (err) {
@@ -1107,7 +1107,7 @@ $("shareSend").addEventListener("click", async () => {
   let jurusan = $("shareJurusan").value;
   if (jurusan === "Lainnya") jurusan = $("shareJurusanLain").value.trim();
   const picked = [...$("shareModules").querySelectorAll("input:checked")].map((i) => Number(i.value));
-  if (!nama) return showMsg("shareMsg", "Nama kamu belum diisi.");
+  if (!nama) return showMsg("shareMsg", "Nama kalian belum diisi.");
   if (!jurusan) return showMsg("shareMsg", "Jurusannya belum dipilih.");
   if (!picked.length) return showMsg("shareMsg", "Centang minimal satu modul.");
 
@@ -1121,7 +1121,7 @@ $("shareSend").addEventListener("click", async () => {
   try {
     const res = await apiPost({ aksi: "bagikan", nama, jurusan, kunci: courseKey(d), data });
     closeModal("shareModal");
-    toast(res.status === "tampil" ? "🎉 Terima kasih! Materimu sudah bisa dipakai teman-teman." : "🎉 Terima kasih! Materimu akan tampil setelah dicek admin.");
+    toast(res.status === "tampil" ? "🎉 Terima kasih! Materi kalian sudah bisa dipakai teman-teman." : "🎉 Terima kasih! Materi kalian akan tampil setelah dicek admin.");
   } catch (err) {
     showMsg("shareMsg", "😕 " + errText(err));
   } finally {
@@ -1254,7 +1254,7 @@ function renderAll() {
   if (!has) {
     document.title = "Template Belajar Ujian – deMuse";
     $("mkTitle").textContent = "Belajar Ujian Jadi Lebih Ringan";
-    $("mkInfo").textContent = "Masukkan materi mata kuliahmu, langsung jadi ringkasan, kartu hafalan, dan latihan soal.";
+    $("mkInfo").textContent = "Masukkan materi mata kuliah ya warga, nanti akan langsung jadi ringkasan, kartu hafalan, dan latihan soal.";
     tickCountdown();
     return;
   }
@@ -1316,5 +1316,5 @@ $("installBtn").addEventListener("click", async () => {
 });
 window.addEventListener("appinstalled", () => {
   $("installBtn").classList.add("hidden");
-  toast("🎉 Aplikasi terpasang! Cari ikon \"Belajar Ujian\" di layar HP-mu.");
+  toast("🎉 Aplikasi terpasang! Cari ikon \"Belajar Ujian\" di layar HP kalian.");
 });

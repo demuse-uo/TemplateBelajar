@@ -36,7 +36,7 @@
       <button type="button" class="btn install-btn hidden" id="installBtn">📲 Pasang aplikasi</button>
     </div>
     <h1 id="mkTitle">Belajar Ujian Jadi Lebih Ringan</h1>
-    <p id="mkInfo">Masukkan materi mata kuliahmu, langsung jadi ringkasan, kartu hafalan, dan latihan soal.</p>
+    <p id="mkInfo">Masukkan materi mata kuliah ya warga, nanti akan langsung jadi ringkasan, kartu hafalan, dan latihan soal.</p>
 
     <div class="subject-bar hidden" id="subjectBar">
       <select id="subjectSelect" aria-label="Pilih mata kuliah"></select>
@@ -63,8 +63,8 @@
   <p>Bisa dipakai untuk mata kuliah apa saja.</p>
   <div class="steps">
     <div class="step"><b>1</b><h3>Tekan "Masukkan Materi"</h3><p>Ada di tombol merah muda di bawah ini.</p></div>
-    <div class="step"><b>2</b><h3>Isi materinya</h3><p>Ketik di formulir yang tersedia, atau tempel catatanmu yang sudah tersusun.</p></div>
-    <div class="step"><b>3</b><h3>Simpan, lalu belajar</h3><p>Materimu langsung jadi ringkasan, kartu hafalan, dan latihan soal.</p></div>
+    <div class="step"><b>2</b><h3>Isi materinya</h3><p>Ketik di formulir yang tersedia, atau tempel catatan kalian yang sudah tersusun.</p></div>
+    <div class="step"><b>3</b><h3>Simpan, lalu belajar</h3><p>Materi warga langsung jadi ringkasan, kartu hafalan, dan latihan soal.</p></div>
   </div>
   <div class="row center">
     <button class="btn pink" data-open-import>📥 Masukkan Materi</button>
@@ -99,7 +99,7 @@
       </div>
       <div class="flashcard" id="fcCard">
         <div class="fc-inner">
-          <div class="fc-face fc-front"><h2 id="fcFront"></h2><p class="fc-hint">Tekan kartu untuk lihat artinya</p></div>
+          <div class="fc-face fc-front"><h2 id="fcFront"></h2><p class="fc-hint">Tekan kartu untuk tau artinya</p></div>
           <div class="fc-face fc-back"><p id="fcBack"></p></div>
         </div>
       </div>
@@ -129,9 +129,9 @@
     </section>
 
     <section class="panel" id="esai">
-      <div class="note">Coba jawab dulu dengan kata-katamu sendiri, baru cek contoh jawabannya. Ini latihan paling ampuh buat ujian esai 💪</div>
+      <div class="note">Coba jawab dulu dengan kata-kata warga sendiri, baru cek contoh jawabannya ya. Ini latihan untuk persiapan ujian💪</div>
       <div class="fc-controls needs-api">
-        <button class="btn pink" data-open-soal="esai">➕ Buat soal esai untuk teman</button>
+        <button class="btn pink" data-open-soal="esai">➕ Buat soal untuk teman</button>
       </div>
       <div id="esaiList"></div>
     </section>
@@ -146,13 +146,13 @@
   </main>
 </div>
 
-<footer>Template belajar oleh deMuse · Materi tersimpan otomatis di HP/laptop kamu · Semangat ujiannya! 🌸</footer>
+<footer>Template belajar oleh deMuse · Materi akan tersimpan otomatis di HP/laptop warga · Semangat ujiannya! 🌸</footer>
 
 <!-- ===== MODAL: MASUKKAN MATERI ===== -->
 <div class="modal hidden" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
   <div class="modal-box">
     <h2 id="importTitle">📥 Masukkan Materi</h2>
-    <p class="muted">Pilih cara yang paling mudah untukmu.</p>
+    <p class="muted">Pilih cara yang paling mudah untuk kalian.</p>
     <div class="mode-tabs">
       <button type="button" class="mode-btn active" data-mode="form">✏️ Isi formulir</button>
       <button type="button" class="mode-btn" data-mode="tempel">📋 Tempel catatan</button>
@@ -188,9 +188,9 @@
           </label>
         </div>
         <label class="field">Ringkasan
-          <textarea id="fRingkasan" placeholder="Tulis inti materinya dengan kata-katamu sendiri..."></textarea>
+          <textarea id="fRingkasan" placeholder="Tulis inti materinya dengan kata-kata kalian sendiri..."></textarea>
         </label>
-        <label class="field">Poin penting <small>Tulis satu poin per baris.</small>
+        <label class="field">Poin penting <small>Tulis poin penting dari materi.</small>
           <textarea id="fPoin" placeholder="Masalah pokok ekonomi adalah kelangkaan&#10;Setiap pilihan punya biaya peluang"></textarea>
         </label>
       </fieldset>
@@ -219,7 +219,7 @@
     <!-- CARA 2: TEMPEL CATATAN -->
     <div id="modeTempel" class="hidden">
       <p style="margin-top:14px">Sudah punya catatan yang tersusun? Tempel di kotak ini. Tulis judul seperti <b>MODUL 1:</b>, <b>RINGKASAN:</b>, <b>SOAL:</b>, dan <b>JAWABAN:</b> persis seperti contoh.</p>
-      <textarea id="pasteInput" placeholder="Tempel catatanmu di sini..." style="min-height:180px;margin-top:10px"></textarea>
+      <textarea id="pasteInput" placeholder="Tempel catatan kalian di sini..." style="min-height:180px;margin-top:10px"></textarea>
 
       <details class="modal-step other-way">
         <summary>Lihat contoh susunannya</summary>
@@ -231,11 +231,11 @@
 
     <!-- CARA 3: DARI FILE -->
     <div id="modeFile" class="hidden">
-      <p style="margin-top:14px">Pilih file materimu. Isinya langsung diambil dan disimpan sebagai ringkasan dan poin penting.</p>
+      <p style="margin-top:14px">Pilih file materi kalian. Isinya langsung diambil dan disimpan sebagai ringkasan dan poin penting.</p>
       <label class="dropzone" id="dropzone">
         <span class="dz-icon" aria-hidden="true">📂</span>
         <strong>Pilih file materi</strong>
-        <small>PDF, PowerPoint (.pptx), Word (.docx),<br>atau file .txt dari teman. Bisa juga tarik file-nya ke sini.</small>
+        <small>PDF, PowerPoint (.pptx), Word (.docx),<br>atau file .txt dari teman. Bisa juga drag and drop file-nya ke sini.</small>
         <span class="btn primary dz-btn">Cari file</span>
         <input type="file" id="fileInput" accept=".pdf,.pptx,.docx,.txt,.json,.ppt,.doc,application/pdf,text/plain" hidden>
       </label>
@@ -287,7 +287,7 @@
     <h2 id="shareTitle">📤 Bagikan ke teman-teman</h2>
     <p class="muted" id="shareSubject"></p>
 
-    <label class="field">Nama kamu
+    <label class="field">Nama kalian
       <input type="text" id="shareNama" maxlength="60" placeholder="Contoh: Silfa">
     </label>
     <label class="field">Jurusan
@@ -298,7 +298,7 @@
     </label>
 
     <div class="field">Modul yang dibagikan
-      <small>Kerja kelompok? Centang hanya modul yang kamu kerjakan.</small>
+      <small>Kerja kelompok? Centang hanya modul yang kalian kerjakan.</small>
       <div id="shareModules" class="choice-list"></div>
     </div>
 
@@ -315,7 +315,7 @@
 <div class="modal hidden" id="soalModal" role="dialog" aria-modal="true" aria-labelledby="soalTitle">
   <div class="modal-box">
     <h2 id="soalTitle">➕ Buat soal untuk teman</h2>
-    <p class="muted">Soalmu ditambahkan untuk teman-teman. Soal yang sudah ada tidak akan berubah.</p>
+    <p class="muted">Soal kalian ditambahkan untuk teman-teman. Soal yang sudah ada tidak akan berubah.</p>
 
     <label class="field">Untuk modul
       <select id="soalModul"></select>
@@ -345,7 +345,7 @@
       <textarea id="soalBahas" maxlength="1500" placeholder="Kenapa jawabannya benar?"></textarea>
     </label>
 
-    <label class="field">Nama kamu
+    <label class="field">Nama kalian
       <input type="text" id="soalNama" maxlength="60" placeholder="Contoh: Silfa">
     </label>
 
