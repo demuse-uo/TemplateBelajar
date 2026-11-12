@@ -3,7 +3,7 @@
    Kalau file website diubah, naikkan angka VERSI di bawah
    (misalnya v1 → v2) supaya semua HP mengambil versi terbaru.
    ============================================================ */
-const VERSI = "belajar-ujian-v1";
+const VERSI = "belajar-ujian-v4";
 
 const FILE_UTAMA = [
   "./template-belajar-ujian.html",
@@ -40,7 +40,8 @@ self.addEventListener("fetch", (e) => {
   if (url.hostname.endsWith("script.google.com") || url.hostname.endsWith("googleusercontent.com")) return;
 
   const bolehSimpan = url.origin === self.location.origin ||
-    url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
+    url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com" ||
+    url.hostname === "cdnjs.cloudflare.com"; // pembaca PDF/PowerPoint
   if (!bolehSimpan) return;
 
   // Pakai simpanan dulu supaya cepat & bisa offline, sambil ambil versi baru di belakang

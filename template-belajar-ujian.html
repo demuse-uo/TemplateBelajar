@@ -156,6 +156,7 @@
     <div class="mode-tabs">
       <button type="button" class="mode-btn active" data-mode="form">✏️ Isi formulir</button>
       <button type="button" class="mode-btn" data-mode="tempel">📋 Tempel catatan</button>
+      <button type="button" class="mode-btn" data-mode="file">📂 Dari file</button>
     </div>
 
     <!-- CARA 1: ISI FORMULIR -->
@@ -226,14 +227,19 @@
         <button type="button" class="btn" id="copyContoh">📋 Salin contoh ini</button>
       </details>
 
-      <details class="modal-step other-way">
-        <summary>Punya file materi dari teman? Tekan di sini</summary>
-        <label class="dropzone" id="dropzone">
-          <strong>📂 Pilih file materi</strong>
-          <small>File .txt hasil "Simpan ke file", atau tarik file-nya ke kotak ini</small>
-          <input type="file" id="fileInput" accept=".txt,.json,text/plain,application/json" hidden>
-        </label>
-      </details>
+    </div>
+
+    <!-- CARA 3: DARI FILE -->
+    <div id="modeFile" class="hidden">
+      <p style="margin-top:14px">Pilih file materimu. Isinya langsung diambil dan disimpan sebagai ringkasan dan poin penting.</p>
+      <label class="dropzone" id="dropzone">
+        <span class="dz-icon" aria-hidden="true">📂</span>
+        <strong>Pilih file materi</strong>
+        <small>PDF, PowerPoint (.pptx), Word (.docx),<br>atau file .txt dari teman. Bisa juga tarik file-nya ke sini.</small>
+        <span class="btn primary dz-btn">Cari file</span>
+        <input type="file" id="fileInput" accept=".pdf,.pptx,.docx,.txt,.json,.ppt,.doc,application/pdf,text/plain" hidden>
+      </label>
+      <p class="tip">💡 Dari PDF/PowerPoint yang terisi hanya ringkasan dan poin penting. Soal latihan bisa ditambahkan nanti lewat <b>Isi formulir</b>. PDF hasil scan/foto tidak bisa dibaca.</p>
     </div>
 
     <div class="msg hidden" id="importMsg"></div>

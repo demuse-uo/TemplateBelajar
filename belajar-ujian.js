@@ -555,6 +555,8 @@ function setMode(mode) {
   document.querySelectorAll(".mode-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
   $("modeForm").classList.toggle("hidden", mode !== "form");
   $("modeTempel").classList.toggle("hidden", mode !== "tempel");
+  $("modeFile").classList.toggle("hidden", mode !== "file");
+  $("saveImport").classList.toggle("hidden", mode === "file");
   showMsg("importMsg", "");
 }
 document.querySelectorAll(".mode-btn").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
@@ -585,17 +587,165 @@ function tryImport(text) {
   }
 }
 
-function readFile(file) {
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { showMsg("importMsg", "😕 File terlalu besar (maks 5 MB)."); return; }
-  if (/\.(pdf|docx?|pptx?|jpe?g|png|heic)$/i.test(file.name)) {
-    showMsg("importMsg", "📄 File PDF/Word/foto tidak bisa dibaca langsung. Silakan ketik isinya di formulir, atau tempel teksnya di kotak ini.");
-    return;
+/* ---------- Cara 3: pilih file (PDF, PowerPoint, Word, .txt) ---------- */
+const LIB_PDF = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const LIB_PDF_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const LIB_ZIP = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+const scriptCache = {};
+function loadScript(src) {
+  if (!scriptCache[src]) {
+    scriptCache[src] = new Promise((res, rej) => {
+      const el = document.createElement("script");
+      el.src = src; el.onload = res;
+      el.onerror = () => { delete scriptCache[src]; rej(new Error("Pembaca file gagal dimuat. Pastikan HP/laptop tersambung ke internet, lalu coba lagi.")); };
+      document.head.appendChild(el);
+    });
   }
-  const reader = new FileReader();
-  reader.onload = () => { $("pasteInput").value = reader.result; tryImport(reader.result); };
-  reader.onerror = () => showMsg("importMsg", "😕 File tidak bisa dibaca.");
-  reader.readAsText(file);
+  return scriptCache[src];
+}
+
+const SUSUNAN_RE = /^\s*(modul|bab)\s+\d+\s*[:.\-–]|^\s*(ringkasan|poin penting|soal)\s*:/im;
+const judulDariFile = (name) => name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").replace(/\s+/g, " ").trim() || "Materi dari file";
+const bersih = (t) => String(t).replace(/\s+/g, " ").trim();
+
+// Pecah paragraf yang terlalu panjang menjadi beberapa bagian di akhir kalimat
+function potongParagraf(p, maks = 600) {
+  if (p.length <= maks) return [p];
+  const out = []; let cur = "";
+  (p.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [p]).forEach((k) => {
+    if ((cur + k).length > maks && cur) { out.push(cur.trim()); cur = ""; }
+    cur += k;
+  });
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+// Baris-baris teks → paragraf (dipakai PDF & Word)
+function barisKeParagraf(lines) {
+  const paras = []; let cur = "";
+  const tutup = () => { if (cur.trim()) paras.push(bersih(cur)); cur = ""; };
+  lines.forEach((raw) => {
+    const line = raw.trim();
+    if (!line) { tutup(); return; }
+    if (/^(halaman\s*)?\d{1,4}$/i.test(line)) return;          // nomor halaman
+    cur = cur.endsWith("-") ? cur.slice(0, -1) + line : (cur ? cur + " " + line : line);
+    if (/[.!?:]["')\]]?$/.test(line) && cur.length > 220) tutup();
+  });
+  tutup();
+  return paras.filter((p) => p.length >= 20).flatMap((p) => potongParagraf(p));
+}
+
+function paragrafKeMateri(paras, judul) {
+  if (!paras.length) throw new Error("Tidak ada tulisan yang bisa dibaca di file ini. Kalau file-nya hasil scan/foto, silakan ketik materinya di formulir.");
+  return { mataKuliah: judul, modul: [{ judul, ringkasan: paras[0], poin: paras.slice(1) }] };
+}
+
+async function bacaPdf(file) {
+  await loadScript(LIB_PDF);
+  const lib = window.pdfjsLib;
+  lib.GlobalWorkerOptions.workerSrc = LIB_PDF_WORKER;
+  const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const lines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    showMsg("importMsg", `⏳ Membaca halaman ${p} dari ${pdf.numPages}...`, "ok");
+    const isi = await (await pdf.getPage(p)).getTextContent();
+    let line = "";
+    isi.items.forEach((it) => { line += it.str || ""; if (it.hasEOL) { lines.push(line); line = ""; } });
+    if (line) lines.push(line);
+    lines.push("");
+  }
+  const teks = lines.join("\n");
+  if (SUSUNAN_RE.test(teks)) return bacaMateri(teks);
+  if (teks.replace(/\s/g, "").length < 40) throw new Error("PDF ini sepertinya hasil scan/foto, jadi tulisannya tidak bisa dibaca. Silakan ketik materinya di formulir.");
+  return paragrafKeMateri(barisKeParagraf(lines), judulDariFile(file.name));
+}
+
+const tagNS = (el, name) => [...el.getElementsByTagNameNS("*", name)];
+const teksParagraf = (p) => tagNS(p, "t").map((t) => t.textContent).join("").trim();
+
+async function bacaPptx(file) {
+  await loadScript(LIB_ZIP);
+  const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
+  const nomor = (f) => Number(f.match(/slide(\d+)\.xml$/)[1]);
+  const files = Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((x, y) => nomor(x) - nomor(y));
+  if (!files.length) throw new Error("Isi PowerPoint tidak ditemukan.");
+  const slides = [];
+  for (const f of files) {
+    const doc = new DOMParser().parseFromString(await zip.file(f).async("string"), "application/xml");
+    let judul = "", sub = "", isi = [];
+    tagNS(doc, "sp").forEach((sp) => {
+      const ph = tagNS(sp, "ph")[0];
+      const type = ph ? ph.getAttribute("type") || "body" : "";
+      if (/^(sldNum|dt|ftr|hdr)$/.test(type)) return;
+      const paras = tagNS(sp, "p").map(teksParagraf).filter(Boolean);
+      if (!paras.length) return;
+      if (type === "title" || type === "ctrTitle") judul = bersih(paras.join(" "));
+      else if (type === "subTitle") sub = bersih(paras.join(" "));
+      else isi.push(...paras.map(bersih));
+    });
+    tagNS(doc, "tbl").forEach((tbl) => tagNS(tbl, "tr").forEach((tr) => {
+      const sel = tagNS(tr, "tc").map((tc) => tagNS(tc, "p").map(teksParagraf).join(" ").trim()).filter(Boolean);
+      if (sel.length) isi.push(sel.join(" – "));
+    }));
+    if (!judul && isi.length) judul = isi.shift();
+    if (judul || sub || isi.length) slides.push({ judul, sub, isi });
+  }
+  const semua = slides.map((s) => [s.judul, s.sub, ...s.isi].join("\n")).join("\n");
+  if (SUSUNAN_RE.test(semua)) return bacaMateri(semua);
+  if (!slides.length) throw new Error("Tidak ada tulisan di slide. Kalau isinya gambar semua, silakan ketik materinya di formulir.");
+
+  const pertama = slides[0];
+  const slideJudul = pertama.sub || !pertama.isi.length;           // slide 1 = slide judul?
+  const judul = (slideJudul && pertama.judul) || judulDariFile(file.name);
+  const ringkasan = slideJudul ? pertama.sub : "";
+  const poin = [], istilah = [];
+  (slideJudul ? slides.slice(1) : slides).forEach((s) => {
+    const isi = s.isi.join("; ");
+    const p = s.judul && isi ? `${s.judul}: ${isi}` : s.judul || isi;
+    if (p) poin.push(...potongParagraf(p, 800));
+    s.isi.forEach((baris) => {
+      const m = baris.match(/^([^:–]{2,50}?)\s*[:–]\s+(.{3,300})$/);
+      if (m && m[1].trim().split(/\s+/).length <= 6) istilah.push({ kata: m[1].trim(), arti: m[2].trim() });
+    });
+  });
+  return { mataKuliah: judul, modul: [{ judul, ringkasan, poin, istilah }] };
+}
+
+async function bacaDocx(file) {
+  await loadScript(LIB_ZIP);
+  const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
+  const xml = zip.file("word/document.xml");
+  if (!xml) throw new Error("Isi dokumen Word tidak ditemukan.");
+  const doc = new DOMParser().parseFromString(await xml.async("string"), "application/xml");
+  const lines = tagNS(doc, "p").map(teksParagraf).flatMap((t) => [t, ""]);
+  const teks = lines.join("\n");
+  if (SUSUNAN_RE.test(teks)) return bacaMateri(teks);
+  return paragrafKeMateri(barisKeParagraf(lines), judulDariFile(file.name));
+}
+
+async function readFile(file) {
+  if (!file) return;
+  const name = file.name.toLowerCase();
+  if (/\.(ppt|doc)$/.test(name)) { showMsg("importMsg", "📄 File PowerPoint/Word versi lama belum bisa dibaca. Buka file-nya, pilih Save As (Simpan Sebagai), lalu simpan sebagai .pptx atau .docx."); return; }
+  if (/\.(jpe?g|png|heic|webp|gif)$/.test(name)) { showMsg("importMsg", "🖼️ Foto tidak bisa dibaca langsung. Silakan ketik materinya di formulir."); return; }
+  const besar = /\.(pdf|pptx|docx)$/.test(name);
+  if (file.size > (besar ? 40 : 5) * 1024 * 1024) { showMsg("importMsg", `😕 File terlalu besar (maks ${besar ? 40 : 5} MB).`); return; }
+  showMsg("importMsg", "⏳ Membaca file, tunggu sebentar...", "ok");
+  try {
+    let raw;
+    if (name.endsWith(".pdf")) raw = await bacaPdf(file);
+    else if (name.endsWith(".pptx")) raw = await bacaPptx(file);
+    else if (name.endsWith(".docx")) raw = await bacaDocx(file);
+    else raw = bacaMateri(await file.text());
+    const data = normalize(raw);
+    showMsg("importMsg", "");
+    closeModal("importModal");
+    chooseDestination(data);
+  } catch (err) {
+    showMsg("importMsg", "😕 " + (err && err.message ? err.message : "File tidak bisa dibaca."));
+  } finally {
+    $("fileInput").value = "";
+  }
 }
 
 const dz = $("dropzone");
