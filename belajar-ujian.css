@@ -180,7 +180,7 @@ footer { text-align: center; font-size: 0.82rem; color: var(--muted); padding: 2
 
 .field { display: block; margin-top: 16px; font-weight: 600; color: var(--navy); }
 .field small { display: block; font-weight: 400; color: var(--muted); margin-top: 2px; }
-.field input[type="text"], .field select, .field textarea { display: block; width: 100%; margin-top: 6px; font-weight: 400; }
+.field input[type="text"], .field input[type="number"], .field input[type="date"], .field select, .field textarea { display: block; width: 100%; margin-top: 6px; font-weight: 400; }
 input[type="text"] { padding: 11px 14px; border: 2px solid var(--line); border-radius: 12px; font: inherit; background: var(--white); color: var(--espresso); }
 input[type="text"]:focus { outline: none; border-color: var(--ming); }
 .search.inline { flex: 1 1 200px; width: auto; margin-bottom: 0; }
@@ -251,3 +251,95 @@ input[type="date"]:focus, input[type="number"]:focus { outline: none; border-col
 .other-way summary { list-style-position: inside; }
 .mode-btn { line-height: 1.25; padding: 10px 6px; }
 .msg.ok { background: #e5f2f0; color: var(--good); }
+
+/* ===== FORMAT TULISAN ===== */
+.rich-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.rich-tools button { font: 600 0.85rem "Nunito", sans-serif; display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 4px 10px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--white); color: var(--navy); cursor: pointer; }
+.rich-tools button small { font-weight: 500; color: var(--muted); font-size: 0.78rem; }
+.rich-tools button:hover { border-color: var(--ming); }
+.rich-tools .lihat { margin-left: auto; color: var(--ming); }
+.rich-tools + textarea { margin-top: 6px; }
+.rich-preview { background: var(--white); border: 1.5px dashed var(--ming); border-radius: 12px; padding: 10px 14px; margin: 0 0 8px; font-size: 0.95rem; font-weight: 400; color: var(--espresso); }
+.rich p { margin: 0 0 8px; }
+.rich p:last-child { margin-bottom: 0; }
+.rich .rhead { font-size: 1.05rem; font-weight: 800; color: var(--navy); margin: 14px 0 6px; }
+.rich .rsub { font-size: 0.95rem; font-weight: 700; color: var(--ming); margin: 10px 0 4px; }
+.rich > .rhead:first-child, .rich > .rsub:first-child { margin-top: 0; }
+.rich ul { padding-left: 20px; margin: 0 0 6px; }
+.rich li { margin-bottom: 6px; }
+.fc-back strong, .fc-front strong { font-weight: 800; }
+
+/* ===== SIMPAN OTOMATIS ===== */
+.draft-note { margin-top: 12px; background: #fff6d9; border: 1px solid #f1dfa2; border-radius: 12px; padding: 10px 14px; font-size: 0.9rem; }
+.draft-note .link-btn { padding: 0 0 0 6px; color: var(--ming); }
+.modal-actions { align-items: center; }
+.autosave { margin-right: auto; font-size: 0.85rem; font-weight: 600; color: var(--good); opacity: 0; transition: opacity 0.3s; }
+.autosave.show { opacity: 1; }
+
+/* ===== TEMPEL SEDERHANA & SOAL OTOMATIS ===== */
+.steps-mini { margin-top: 14px; background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 6px; }
+.steps-mini p { margin: 0; font-size: 0.95rem; }
+.steps-mini b { color: var(--navy); }
+.by.auto { background: #e5f2f0; color: var(--ming); }
+
+/* ===== KOTAK TULISAN LANGSUNG JADI ===== */
+.editor { width: 100%; min-height: 110px; margin: 6px 0 8px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px; background: var(--white); color: var(--espresso); font: 400 1rem/1.6 "Nunito", sans-serif; text-align: left; cursor: text; white-space: pre-wrap; word-break: break-word; }
+.editor.inline { min-height: 64px; }
+.editor:focus { outline: none; border-color: var(--ming); }
+.editor:empty::before { content: attr(data-placeholder); color: #a89a92; white-space: pre-line; pointer-events: none; }
+.editor h2 { font-size: 1.15rem; font-weight: 800; color: var(--navy); margin: 6px 0 2px; }
+.editor h3 { font-size: 1rem; font-weight: 700; color: var(--ming); margin: 4px 0 2px; }
+.editor div, .editor p { margin: 0; }
+.editor b, .editor strong { font-weight: 800; }
+.form-row .editor { margin: 6px 0 4px; }
+.rich-tools .fh { font-weight: 800; font-size: 1rem; color: var(--navy); }
+.rich-tools .fh2 { font-weight: 700; font-size: 0.9rem; color: var(--ming); }
+.rich-tools button[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: var(--cream); }
+.rich-tools button[aria-pressed="true"] small, .rich-tools button[aria-pressed="true"] span { color: var(--cream); }
+
+/* ===== JUDUL MODUL + SUB-JUDUL ===== */
+#fJudul { min-height: 0; height: 50px; resize: none; overflow: hidden; line-height: 1.5; padding: 11px 14px; margin-bottom: 4px; }
+.two { align-items: start; }
+.two .field small { margin-top: 0; }
+details.modul summary .subjudul { display: block; font-size: 0.88rem; font-weight: 600; color: var(--muted); margin-top: 2px; }
+
+/* ===== BERANDA & TOMBOL KEMBALI ===== */
+.top-line { justify-content: flex-start; }
+.top-line .install-btn { margin-left: auto; }
+.back-btn { background: var(--cream); color: var(--navy); border-color: var(--cream); padding: 8px 14px; min-height: 42px; font-weight: 800; }
+#subjectSelect { display: none; }
+#courseList { margin-bottom: 28px; }
+#courseList h2 { margin-bottom: 4px; }
+.course-grid { display: grid; gap: 12px; margin-top: 18px; text-align: left; }
+@media (min-width: 640px) { .course-grid { grid-template-columns: repeat(2, 1fr); } }
+.course-card { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; font: inherit; color: var(--espresso); background: var(--white); border: 2px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); cursor: pointer; transition: border-color 0.2s, transform 0.1s; }
+.course-card:hover { border-color: var(--ming); }
+.course-card:active { transform: scale(0.99); }
+.cc-name { font-weight: 800; font-size: 1.1rem; color: var(--navy); }
+.cc-meta { font-size: 0.88rem; color: var(--muted); }
+.cc-meta b { color: var(--bad); font-weight: 700; }
+.cc-bar { height: 8px; background: var(--soft); border-radius: 99px; overflow: hidden; margin-top: 4px; }
+.cc-bar i { display: block; height: 100%; background: var(--peony); }
+.cc-prog { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--muted); }
+.cc-go { color: var(--ming); font-weight: 800; }
+.center-link { text-align: center; margin-top: 16px; }
+.modal-back { background: none; border: 0; font: 700 0.95rem "Nunito", sans-serif; color: var(--ming); cursor: pointer; padding: 4px 0; margin: -6px 0 6px; min-height: 36px; }
+.modal-back:hover { color: var(--navy); }
+
+/* ===== MATERI DARI TEMAN DI BERANDA ===== */
+.bersama { margin-top: 40px; text-align: left; }
+.bersama > p { margin: 4px 0 14px; }
+.sec-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sec-head .link-btn { color: var(--ming); font-weight: 700; text-decoration: none; padding: 0; }
+.b-filter { margin-bottom: 12px; }
+.b-group { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 12px; box-shadow: var(--shadow); overflow: hidden; }
+.b-group summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 18px; font-weight: 800; color: var(--navy); font-size: 1.02rem; }
+.b-group summary::-webkit-details-marker { display: none; }
+.b-group summary::after { content: "+"; color: var(--peony); font-size: 1.4rem; font-weight: 800; }
+.b-group[open] summary::after { content: "–"; }
+.b-count { margin-left: auto; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+.b-grid { display: grid; gap: 10px; padding: 0 14px 14px; }
+@media (min-width: 640px) { .b-grid { grid-template-columns: repeat(2, 1fr); } }
+.b-grid .lib-card { margin: 0; box-shadow: none; background: var(--cream); }
+.jur.saya { background: var(--peony); color: var(--navy); margin-right: 4px; }
+.jur.ada { background: #e5f2f0; color: var(--ming); }

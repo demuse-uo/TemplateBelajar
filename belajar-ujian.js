@@ -17,7 +17,7 @@ const JURUSAN = [
   "Administrasi Negara",
   "Ilmu Komunikasi",
   "Ilmu Hukum",
-  "Ilmu Pemerintahan",
+  "Ilmu Perpustakaan",
   "Sosiologi",
   "Manajemen",
   "Akuntansi",
@@ -26,19 +26,28 @@ const JURUSAN = [
   "Sistem Informasi",
   "PGSD",
   "PG PAUD",
-  "Bahasa Inggris"
+  "Sastra Inggris"
 ];
 
 /* ============================================================
    CONTOH SUSUNAN CATATAN (cara "Tempel catatan")
    ============================================================ */
+const CONTOH_SEDERHANA = `MATA KULIAH: Pengantar Ilmu Administrasi
+MODUL 1: Konsep Dasar Administrasi
+
+Administrasi adalah proses kerja sama sekelompok orang untuk mencapai tujuan yang telah ditetapkan.
+
+Administrasi dalam arti sempit sering disamakan dengan ketatausahaan, yaitu kegiatan mencatat dan menyimpan surat.
+- Unsur administrasi: sekelompok orang, kerja sama, dan tujuan bersama.`;
+
 const CONTOH_SUSUNAN = `MATA KULIAH: Pengantar Ilmu Ekonomi
 KODE: FSAB4102
 TANGGAL UJIAN: 6 Desember 2026 pukul 07.30
 
 MODUL 1: Konsep Dasar Ilmu Ekonomi
 RINGKASAN:
-Ilmu ekonomi mempelajari cara manusia memakai sumber daya yang terbatas untuk memenuhi kebutuhan yang tidak terbatas.
+## Pengertian
+Ilmu ekonomi mempelajari cara manusia memakai **sumber daya yang terbatas** untuk memenuhi kebutuhan yang *tidak terbatas*.
 POIN PENTING:
 - Masalah pokok ekonomi adalah kelangkaan.
 - Setiap pilihan punya biaya peluang.
@@ -164,17 +173,51 @@ const errText = (err) => (err instanceof TypeError || /JSON|Unexpected/.test(Str
 /* ============================================================
    MODAL (jendela pop-up)
    ============================================================ */
-function openModal(id) { $(id).classList.remove("hidden"); document.body.style.overflow = "hidden"; }
-function closeModal(id) {
+// Tombol back HP/browser: menutup jendela pop-up dulu, lalu kembali ke Beranda, baru keluar.
+const modalStack = [];
+let abaikanPop = 0;
+const adaRiwayat = () => !!(window.history && history.pushState);
+function sembunyikanModal(id) {
   $(id).classList.add("hidden");
-  if (!document.querySelector(".modal:not(.hidden)")) document.body.style.overflow = "";
+  const i = modalStack.lastIndexOf(id); if (i >= 0) modalStack.splice(i, 1);
+  if (!modalStack.length) document.body.style.overflow = "";
+}
+function openModal(id) {
+  if (!$(id).classList.contains("hidden") && modalStack.includes(id)) return;
+  $(id).classList.remove("hidden");
+  modalStack.push(id);
+  document.body.style.overflow = "hidden";
+  if (adaRiwayat() && !(history.state && history.state.modal)) history.pushState({ ...(history.state || {}), modal: true }, "");
+}
+function closeModal(id) {
+  sembunyikanModal(id);
+  // tunggu sebentar: kadang jendela berikutnya langsung dibuka (misalnya "Simpan ke mana?")
+  setTimeout(() => {
+    if (!modalStack.length && adaRiwayat() && history.state && history.state.modal) { abaikanPop++; history.back(); }
+  }, 60);
 }
 document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => closeModal(b.dataset.close)));
 document.querySelectorAll(".modal").forEach((m) => m.addEventListener("click", (e) => { if (e.target === m) closeModal(m.id); }));
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  const open = [...document.querySelectorAll(".modal:not(.hidden)")];
-  if (open.length) closeModal(open[open.length - 1].id);
+  if (modalStack.length) closeModal(modalStack[modalStack.length - 1]);
+});
+// tombol "← Kembali" di setiap jendela pop-up
+document.querySelectorAll(".modal .modal-box").forEach((box) => {
+  const id = box.parentElement.id;
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "modal-back"; b.innerHTML = "← Kembali";
+  b.addEventListener("click", () => closeModal(id));
+  box.insertBefore(b, box.firstChild);
+});
+window.addEventListener("popstate", () => {
+  if (abaikanPop) { abaikanPop--; return; }
+  if (modalStack.length) {
+    sembunyikanModal(modalStack[modalStack.length - 1]);
+    if (modalStack.length) history.pushState({ ...(history.state || {}), modal: true }, "");
+    return;
+  }
+  if (tampilan === "materi") tampilkanBeranda(false);
 });
 
 /* ============================================================
@@ -223,68 +266,106 @@ function tulisTanggal(iso) {
 function parseSederhana(text) {
   const out = { mataKuliah: "", kode: "", info: "", tanggalUjian: "", catatan: "", modul: [] };
   let mod = null, section = null, q = null, field = null;
-  const newModul = (nomor, judul) => { mod = { nomor, judul, ringkasan: "", poin: [], istilah: [], soal: [], esai: [] }; out.modul.push(mod); section = null; q = null; field = null; };
+  let para = [];   // paragraf teks bebas yang sedang dikumpulkan
+  const flushPara = () => {
+    if (!para.length || !mod) { para = []; return; }
+    const p = para.join(" ").replace(/\s+/g, " ").trim(); para = [];
+    if (!p) return;
+    if (!mod.ringkasan && !mod.poin.length) mod.ringkasan = p;
+    else mod.poin.push(...potongParagraf(p, 700));
+  };
+  const newModul = (nomor, judul) => { flushPara(); mod = { nomor, judul, subjudul: [], ringkasan: "", poin: [], istilah: [], soal: [], esai: [] }; out.modul.push(mod); section = "ringkasan"; q = null; field = null; };
   const ensureModul = () => { if (!mod) newModul(null, ""); };
   const add = (a, b) => (a ? a + " " + b : b);
+  const addLn = (a, b) => (a ? a + "\n" + b : b);       // ringkasan: pertahankan baris & judul
+  const BUL = /^([-•–]|\*(?=\s)|\d+[.)])\s+/;            // tanda poin (bukan *miring*)
 
   const lines = String(text).replace(/\r/g, "").replace(/```[a-zA-Z]*/g, "").split("\n");
   for (let raw of lines) {
-    let line = raw.replace(/\s?\[\d+(?:\s*[,\-–]\s*\d+)*\]/g, "") // angka sumber NotebookLM [1]
-      .replace(/^\s*#+\s*/, "").replace(/\*\*|__/g, "").replace(/^\s*>\s*/, "").replace(/^=+\s*|\s*=+$/g, "").trim();
-    if (!line) continue;
-    const isBullet = /^([-•*–]|\d+[.)])\s+/.test(line);
+    // fmt = baris asli (format **tebal**, *miring*, ## judul tetap ada)
+    const fmt = raw.replace(/\s?\[\d+(?:\s*[,\-–]\s*\d+)*\]/g, "") // angka sumber NotebookLM [1]
+      .replace(/^\s*>\s*/, "").trim();
+    const fl = fmt.replace(/^#+\s*/, "").replace(/^=+\s*|\s*=+$/g, "").trim();
+    // line = versi polos, untuk mengenali judul seperti MODUL 1: / RINGKASAN:
+    const line = fl.replace(/\*\*|__/g, "").trim();
+    if (!line) { if (section === "bebas") flushPara(); if (section === "ringkasan" && mod && mod.ringkasan && !mod.ringkasan.endsWith("\n\n")) mod.ringkasan += "\n"; continue; }
+    const isBullet = BUL.test(line);
+    const two = (re) => fl.match(re) || line.match(re);    // ambil isi dengan format kalau bisa
     let m;
 
     // Info mata kuliah
-    if ((m = line.match(/^mata\s*kuliah\s*[:：]\s*(.*)$/i))) { out.mataKuliah = m[1].trim(); continue; }
-    if ((m = line.match(/^kode(?:\s*mata\s*kuliah)?\s*[:：]\s*(.*)$/i))) { out.kode = m[1].replace(/^[-–—]$/, "").trim(); continue; }
-    if ((m = line.match(/^tanggal\s*ujian\s*[:：]\s*(.*)$/i))) { out.tanggalUjian = parseTanggal(m[1]); continue; }
-    if ((m = line.match(/^(?:info|keterangan)\s*[:：]\s*(.*)$/i))) { out.info = m[1].trim(); continue; }
-    if ((m = line.match(/^(?:catatan|tips)\s*[:：]\s*(.*)$/i))) { if (!out.catatan) out.catatan = m[1].trim(); continue; }
+    const labelBaru = /^(mata\s*kuliah|kode|tanggal\s*ujian|info|keterangan|catatan|tips)\s*[:：]|^(modul|bab)\s+\d+\s*([:.\-–—)]|$)|^(ringkasan|poin(\s*-?\s*poin)?(\s*penting)?|istilah|kata\s*kunci|(soal\s*|latihan\s*)?esai|(latihan\s*)?soal(\s*pilihan\s*ganda|\s*pg)?)\s*[:：]?/i.test(line);
+    if (labelBaru && section === "bebas") flushPara();
+    // Keterangan (MATA KULIAH, KODE, ...) hanya dibaca sebelum isi materi dimulai
+    const belumAdaIsi = !mod || !(mod.ringkasan || mod.poin.length || mod.istilah.length || mod.soal.length || mod.esai.length);
+    if (belumAdaIsi && (m = line.match(/^mata\s*kuliah\s*[:：]\s*(.*)$/i))) { out.mataKuliah = m[1].trim(); continue; }
+    if (belumAdaIsi && (m = line.match(/^kode(?:\s*mata\s*kuliah)?\s*[:：]\s*(.*)$/i))) { out.kode = m[1].replace(/^[-–—]$/, "").trim(); continue; }
+    if (belumAdaIsi && (m = line.match(/^tanggal\s*ujian\s*[:：]\s*(.*)$/i))) { out.tanggalUjian = parseTanggal(m[1]); continue; }
+    if (belumAdaIsi && (m = line.match(/^(?:info|keterangan)\s*[:：]\s*(.*)$/i))) { out.info = m[1].trim(); continue; }
+    if (belumAdaIsi && (m = line.match(/^(?:catatan|tips)\s*[:：]\s*(.*)$/i))) { if (!out.catatan) out.catatan = m[1].trim(); continue; }
+
+    // Sub-judul modul: "SUB-JUDUL: Kegiatan Belajar 1"
+    if (mod && (m = line.match(/^sub[\s-]*judul\s*[:：]\s*(.+)$/i))) { flushPara(); if (mod.subjudul.length < 3) mod.subjudul.push(m[1].trim()); continue; }
 
     // Judul modul: "MODUL 1: Judul" atau "BAB 2 - Judul"
     if (!isBullet && (m = line.match(/^(?:modul|bab)\s+(\d+)\s*(?:[:.\-–—)]\s*(.*)|$)/i))) { newModul(Number(m[1]), (m[2] || "").trim()); continue; }
 
     // Judul bagian
-    if ((m = line.match(/^ringkasan\s*[:：]?\s*(.*)$/i))) { ensureModul(); section = "ringkasan"; if (m[1]) mod.ringkasan = add(mod.ringkasan, m[1]); continue; }
-    if (/^poin(\s*-?\s*poin)?(\s*penting)?\s*[:：]?$/i.test(line)) { ensureModul(); section = "poin"; continue; }
-    if (/^(istilah|kata\s*kunci)(\s*penting)?\s*[:：]?$/i.test(line)) { ensureModul(); section = "istilah"; continue; }
-    if (/^(soal\s*|latihan\s*)?esai\s*[:：]?$/i.test(line)) { ensureModul(); section = "esai"; q = null; continue; }
-    if (/^(latihan\s*)?soal(\s*pilihan\s*ganda|\s*pg)?\s*[:：]?$/i.test(line)) { ensureModul(); section = "soal"; q = null; continue; }
-    if (!section) continue;
+    // Judul bagian hanya dikenali kalau pakai titik dua (SOAL:) atau HURUF BESAR semua (SOAL),
+    // supaya kalimat biasa seperti "Soal ini membahas..." tetap jadi isi materi
+    const judulBagian = (re) => re.test(line) && (/[:：]/.test(line) || line === line.toUpperCase());
+    if ((m = two(/^ringkasan\s*[:：]\s*(.*)$/i)) || line === "RINGKASAN") { ensureModul(); section = "ringkasan"; if (m && m[1].trim()) mod.ringkasan = addLn(mod.ringkasan, m[1].trim()); continue; }
+    if (judulBagian(/^poin(\s*-?\s*poin)?(\s*penting)?\s*[:：]?$/i)) { ensureModul(); section = "poin"; continue; }
+    if (judulBagian(/^(istilah|kata\s*kunci)(\s*penting)?\s*[:：]?$/i)) { ensureModul(); section = "istilah"; continue; }
+    if (judulBagian(/^(soal\s*|latihan\s*)?esai\s*[:：]?$/i)) { ensureModul(); section = "esai"; q = null; continue; }
+    if (judulBagian(/^(latihan\s*)?soal(\s*pilihan\s*ganda|\s*pg)?\s*[:：]?$/i)) { ensureModul(); section = "soal"; q = null; continue; }
+    if (!section) { ensureModul(); section = "ringkasan"; }
 
-    if (section === "ringkasan") { mod.ringkasan = add(mod.ringkasan, line); continue; }
-    if (section === "poin") { mod.poin.push(line.replace(/^([-•*–]|\d+[.)])\s+/, "")); continue; }
-    if (section === "istilah") {
-      const t = line.replace(/^([-•*–]|\d+[.)])\s+/, "");
-      const sp = t.match(/^(.+?)\s*(?:[:：=]|\s[-–—]\s)\s*(.+)$/);
-      if (sp) mod.istilah.push({ kata: sp[1].trim(), arti: sp[2].trim() });
+    // Teks bebas: paragraf pertama = ringkasan, sisanya poin penting; judul (##) & poin (-) tetap
+    if (section === "bebas") {
+      if (/^#{1,3}\s/.test(fmt)) { flushPara(); mod.poin.push(fmt); continue; }
+      if (BUL.test(fl)) { flushPara(); mod.poin.push(fmt.replace(BUL, "")); continue; }
+      para.push(fmt);
       continue;
     }
 
-    const nomorSoal = line.match(/^(?:soal\s*)?\d+\s*[.):]\s*(.+)$/i);
+    if (section === "ringkasan") { mod.ringkasan = addLn(mod.ringkasan, fmt); continue; }
+    if (section === "poin") { mod.poin.push(fmt.replace(BUL, "")); continue; }
+    if (section === "istilah") {
+      const t = line.replace(BUL, "");
+      const sp = t.match(/^(.+?)\s*(?:[:：=]|\s[-–—]\s)\s*(.+)$/);
+      if (sp) mod.istilah.push({ kata: sp[1].trim(), arti: sp[2].trim() });
+      else mod.ringkasan = addLn(mod.ringkasan, fmt);          // jangan dibuang
+      continue;
+    }
+
+    const nomorSoal = two(/^(?:soal\s*)?\d+\s*[.):]\s*(.+)$/i);
     if (section === "soal") {
       if (nomorSoal) { q = { tanya: nomorSoal[1], pilihan: [], jawaban: "", pembahasan: "" }; mod.soal.push(q); field = "tanya"; continue; }
-      if (!q) continue;
-      if ((m = line.match(/^\(?([A-Ha-h])[.)]\s*(.+)$/))) { q.pilihan.push(m[2].trim()); field = null; continue; }
+      if (!q) { mod.ringkasan = addLn(mod.ringkasan, fmt); continue; }
+      if ((m = two(/^\(?([A-Ha-h])[.)]\s*(.+)$/))) { q.pilihan.push(m[2].trim()); field = null; continue; }
       if ((m = line.match(/^(?:kunci\s*)?jawaban(?:\s*benar)?\s*[:：]\s*(.*)$/i))) {
         const h = m[1].trim().match(/^\(?([A-Ha-h])(?:[.)\s]|$)/);
         q.jawaban = h ? h[1].toUpperCase() : m[1].trim(); field = null; continue;
       }
-      if ((m = line.match(/^pembahasan\s*[:：]\s*(.*)$/i))) { q.pembahasan = m[1].trim(); field = "pembahasan"; continue; }
-      if (field === "tanya" && !q.pilihan.length) q.tanya = add(q.tanya, line);
-      else if (field === "pembahasan") q.pembahasan = add(q.pembahasan, line);
+      if ((m = two(/^pembahasan\s*[:：]\s*(.*)$/i))) { q.pembahasan = m[1].trim(); field = "pembahasan"; continue; }
+      if (field === "tanya" && !q.pilihan.length) q.tanya = add(q.tanya, fl);
+      else if (field === "pembahasan") q.pembahasan = add(q.pembahasan, fl);
+      else mod.ringkasan = addLn(mod.ringkasan, fmt);          // jangan dibuang
       continue;
     }
     if (section === "esai") {
       if (nomorSoal) { q = { tanya: nomorSoal[1], jawaban: "" }; mod.esai.push(q); field = "tanya"; continue; }
-      if (!q) continue;
-      if ((m = line.match(/^(?:contoh\s*)?jawaban\s*[:：]\s*(.*)$/i))) { q.jawaban = m[1].trim(); field = "jawaban"; continue; }
-      q[field] = add(q[field], line);
+      if (!q) { mod.ringkasan = addLn(mod.ringkasan, fmt); continue; }
+      if ((m = two(/^(?:contoh\s*)?jawaban\s*[:：]\s*(.*)$/i))) { q.jawaban = m[1].trim(); field = "jawaban"; continue; }
+      q[field] = field === "jawaban" ? addLn(q[field], fmt.replace(BUL, "")) : add(q[field], fl);
     }
   }
+  flushPara();
   out.modul = out.modul.filter((x) => x.judul || x.ringkasan || x.poin.length || x.istilah.length || x.soal.length || x.esai.length);
-  if (!out.modul.length) throw new Error("Belum ada materi yang terbaca. Pastikan catatan kalian memakai judul seperti MODUL 1:, RINGKASAN:, dan SOAL:. Lihat contoh susunannya di bawah kotak.");
+  // buang kalimat pembuka tanpa judul modul (misalnya "Berikut materinya:") kalau ada modul sungguhan
+  out.modul.forEach((x) => { x.ringkasan = x.ringkasan.replace(/\n{3,}/g, "\n\n").trim(); });
+  if (!out.modul.length) throw new Error("Belum ada materi yang terbaca. Pastikan baris paling atas berisi MATA KULIAH: dan MODUL 1:, lalu materinya di bawahnya.");
   return out;
 }
 
@@ -297,6 +378,7 @@ function toText(d) {
   if (d.catatan) L.push(`CATATAN: ${d.catatan}`);
   d.modul.forEach((m) => {
     L.push("", `MODUL ${m.nomor}: ${m.judul}`);
+    (m.subjudul || []).forEach((sj) => L.push(`SUB-JUDUL: ${sj}`));
     if (m.ringkasan) L.push("RINGKASAN:", m.ringkasan);
     if (m.poin.length) L.push("POIN PENTING:", ...m.poin.map((p) => `- ${p}`));
     if (m.istilah.length) L.push("ISTILAH:", ...m.istilah.map((t) => `- ${t.kata}: ${t.arti}`));
@@ -343,6 +425,7 @@ function normalize(obj) {
   const modul = d.modul.filter((m) => m && typeof m === "object").map((m, i) => ({
     nomor: num(m.nomor),
     judul: str(m.judul) || `Modul ${num(m.nomor) || i + 1}`,
+    subjudul: arr(m.subjudul).map(str).filter(Boolean).slice(0, 3),
     ringkasan: str(m.ringkasan),
     poin: arr(m.poin).map(str).filter(Boolean),
     istilah: arr(m.istilah).map((t) => ({ kata: str(t?.kata ?? t?.istilah), arti: str(t?.arti ?? t?.definisi) })).filter((t) => t.kata && t.arti),
@@ -385,9 +468,8 @@ function saveNew(data) {
   while (library.subjects[id]) id = `${base}-${n++}`;
   data.modul = fillNomor(data.modul);
   library.subjects[id] = data;
-  library.active = id;
   saveLibrary();
-  renderAll();
+  bukaMateri(id);
   toast(`🎉 Tersimpan: ${data.mataKuliah} · ${data.modul.length} modul`);
 }
 
@@ -401,20 +483,19 @@ function mergeInto(id, incoming) {
   });
   ["kode", "info", "tanggalUjian", "catatan"].forEach((k) => { if (!target[k] && incoming[k]) target[k] = incoming[k]; });
   fillNomor(target.modul);
-  library.active = id;
   saveLibrary();
-  renderAll();
+  bukaMateri(id);
   const parts = [];
   if (added) parts.push(`${added} modul ditambahkan`);
   if (updated) parts.push(`${updated} modul diperbarui`);
   toast(`🎉 ${target.mataKuliah}: ${parts.join(", ")}`);
 }
 
-let pending = null;
-function chooseDestination(data) {
+let pending = null, pendingDraf = false;
+function chooseDestination(data, dariDraf = false) {
   const ids = Object.keys(library.subjects);
-  if (!ids.length) { saveNew(data); return; }
-  pending = data;
+  if (!ids.length) { saveNew(data); if (dariDraf) hapusDrafMateri(); return; }
+  pending = data; pendingDraf = dariDraf;
   const key = courseKey(data);
   const match = ids.find((id) => { const s = library.subjects[id]; return courseKey(s) === key || slug(s.mataKuliah) === slug(data.mataKuliah); });
   const nomorList = data.modul.map((m) => m.nomor).filter(Boolean);
@@ -437,6 +518,7 @@ $("destSave").addEventListener("click", () => {
   closeModal("destModal");
   if (!pick || pick.value === "__baru" || !library.subjects[pick.value]) saveNew(data);
   else mergeInto(pick.value, data);
+  if (pendingDraf) { hapusDrafMateri(); pendingDraf = false; }
 });
 
 /* ============================================================
@@ -462,6 +544,188 @@ function addIstilahRow() {
     <div class="two"><input type="text" class="i-kata" maxlength="150" placeholder="Istilah, contoh: Kelangkaan">
     <input type="text" class="i-arti" maxlength="500" placeholder="Artinya"></div>`);
 }
+/* ---------- Kotak tulisan langsung jadi (tebal, miring, judul tanpa tanda # atau *) ----------
+   Di balik layar isi tetap disimpan dengan tanda sederhana (## judul, **tebal**, *miring*)
+   di <textarea> tersembunyi, supaya simpan otomatis, berbagi, dan file .txt tetap jalan. */
+try { document.execCommand("defaultParagraphSeparator", false, "div"); } catch (e) {}
+const nilaiAsli = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+
+// Kotak tulisan (HTML) → teks bertanda
+function editorKeTeks(root) {
+  const lines = []; let cur = ""; let habisBr = false;
+  const baris = () => { lines.push(cur); cur = ""; };
+  const tebal = (el) => /^(B|STRONG)$/.test(el.tagName) || Number(el.style && el.style.fontWeight) >= 600 || (el.style && el.style.fontWeight === "bold");
+  const miring = (el) => /^(I|EM)$/.test(el.tagName) || (el.style && el.style.fontStyle === "italic");
+  const BLOK = /^(DIV|P|H1|H2|H3|H4|H5|H6|LI|BLOCKQUOTE|PRE|TR|SECTION|ARTICLE|HEADER|FOOTER)$/;
+  const jalan = (node) => {
+    node.childNodes.forEach((n) => {
+      if (n.nodeType === 3) { const t = n.nodeValue.replace(/[\r\n]+/g, " ").replace(/ /g, " "); if (t) { cur += t; habisBr = false; } return; }
+      if (n.nodeType !== 1) return;
+      const tag = n.tagName;
+      if (tag === "BR") { baris(); habisBr = true; return; }
+      if (/^(SCRIPT|STYLE|META|TITLE)$/.test(tag)) return;
+      if (BLOK.test(tag)) {
+        if (cur !== "") baris();
+        habisBr = false;
+        if (/^H[12]$/.test(tag)) cur = "## ";
+        else if (/^H[3-6]$/.test(tag)) cur = "### ";
+        else if (tag === "LI") cur = "- ";
+        jalan(n);
+        if (cur !== "" || !habisBr) baris();
+        habisBr = false;
+        return;
+      }
+      const b = tebal(n), i = miring(n);
+      if (b) cur += "**"; if (i) cur += "*";
+      jalan(n);
+      if (i) cur += "*"; if (b) cur += "**";
+    });
+  };
+  jalan(root);
+  if (cur !== "") baris();
+  return lines
+    .map((l) => l.replace(/\*{4}/g, "").replace(/^(#{2,3} |- )\s*$/, "").replace(/\s+$/, ""))
+    .join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "");
+}
+// Teks bertanda → kotak tulisan (HTML)
+function teksKeEditor(teks, inline) {
+  const v = String(teks ?? "");
+  if (!v) return "";
+  return v.split("\n").map((l) => {
+    let m;
+    if (!inline && (m = l.match(/^###\s+(.*)$/))) return `<h3>${fmtInline(esc(m[1])) || "<br>"}</h3>`;
+    if (!inline && (m = l.match(/^##?\s+(.*)$/))) return `<h2>${fmtInline(esc(m[1])) || "<br>"}</h2>`;
+    return `<div>${fmtInline(esc(l)) || "<br>"}</div>`;
+  }).join("");
+}
+
+function enhanceRich(ta, kind = "block") {
+  if (!ta || ta.dataset.rich) return;
+  ta.dataset.rich = kind;
+  const inline = kind === "inline";
+  const bar = document.createElement("div");
+  bar.className = "rich-tools";
+  bar.innerHTML = (!inline ? `<button type="button" data-fmt="h" title="Judul" aria-pressed="false"><span class="fh">Judul</span></button>
+    <button type="button" data-fmt="h2" title="Sub-judul" aria-pressed="false"><span class="fh2">Sub-judul</span></button>` : "") +
+    `<button type="button" data-fmt="b" title="Tebal (Ctrl+B)" aria-pressed="false"><b>B</b> <small>Tebal</small></button>
+    <button type="button" data-fmt="i" title="Miring (Ctrl+I)" aria-pressed="false"><i>I</i> <small>Miring</small></button>`;
+  const ed = document.createElement("div");
+  ed.className = "editor rich" + (inline ? " inline" : "");
+  ed.contentEditable = "true";
+  ed.setAttribute("role", "textbox");
+  ed.setAttribute("aria-multiline", "true");
+  ed.dataset.placeholder = ta.placeholder || "";
+  if (ta.style.minHeight) ed.style.minHeight = ta.style.minHeight;
+  ta.parentNode.insertBefore(bar, ta);
+  ta.parentNode.insertBefore(ed, ta);
+  ta.classList.add("hidden");
+  ta.tabIndex = -1;
+  ta._editor = ed;
+  ed._ta = ta;
+  // setiap kali kode mengisi ta.value (draf, kosongkan, contoh), kotak tulisan ikut berubah
+  Object.defineProperty(ta, "value", {
+    configurable: true,
+    get() { return nilaiAsli.get.call(ta); },
+    set(v) { nilaiAsli.set.call(ta, v); if (!ta._sinkron) { ed.innerHTML = teksKeEditor(v, inline); } }
+  });
+  ed.innerHTML = teksKeEditor(nilaiAsli.get.call(ta), inline);
+  ed.addEventListener("input", () => {
+    ta._sinkron = true; ta.value = editorKeTeks(ed); ta._sinkron = false;
+    if (!ed.textContent.trim() && !ed.querySelector("h2,h3")) ed.innerHTML = "";
+    perbaruiTombol();
+  });
+  // tempel: ambil tebal/miring/judul saja, buang gaya lain dari Word/PDF/web
+  ed.addEventListener("paste", (e) => {
+    const cd = e.clipboardData; if (!cd) return;
+    e.preventDefault();
+    const html = cd.getData("text/html"), plain = cd.getData("text/plain");
+    let teks;
+    if (html) { const tmp = document.createElement("div"); tmp.innerHTML = html; teks = editorKeTeks(tmp); }
+    else teks = plain.replace(/\r/g, "");
+    // sisipkan sendiri (bukan insertHTML) supaya browser tidak menambah warna/font tersembunyi
+    const html2 = inline ? fmtInline(esc(teks.replace(/^#{1,3}\s+/gm, ""))).replace(/\n/g, "<br>") : teksKeEditor(teks, false);
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !ed.contains(sel.anchorNode)) { ed.focus(); const r0 = document.createRange(); r0.selectNodeContents(ed); r0.collapse(false); sel.removeAllRanges(); sel.addRange(r0); }
+    const r = sel.getRangeAt(0);
+    r.deleteContents();
+    const frag = r.createContextualFragment(html2);
+    const akhir = frag.lastChild;
+    r.insertNode(frag);
+    if (akhir) { const r2 = document.createRange(); r2.selectNodeContents(akhir); r2.collapse(false); sel.removeAllRanges(); sel.addRange(r2); }
+    ed.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  if (ta.labels && ta.labels[0]) ed.setAttribute("aria-label", ta.labels[0].firstChild.textContent.trim());
+}
+function enhanceAll(root) {
+  root.querySelectorAll("textarea.s-tanya, textarea.e-tanya").forEach((t) => enhanceRich(t, "inline"));
+  root.querySelectorAll("textarea.e-jawab").forEach((t) => enhanceRich(t, "block"));
+}
+function editorAktif() {
+  const sel = window.getSelection();
+  const node = sel && sel.anchorNode;
+  const el = node && (node.nodeType === 1 ? node : node.parentElement);
+  return el ? el.closest(".editor") : null;
+}
+function blokSekarang(ed) {
+  const sel = window.getSelection(); let n = sel && sel.anchorNode;
+  while (n && n !== ed) { if (n.nodeType === 1 && /^(H2|H3|DIV|P)$/.test(n.tagName)) return n.tagName; n = n.parentNode; }
+  return "";
+}
+function perbaruiTombol() {
+  const ed = editorAktif();
+  document.querySelectorAll(".rich-tools").forEach((bar) => {
+    const milik = bar.nextElementSibling === ed;
+    const blok = milik ? blokSekarang(ed) : "";
+    bar.querySelectorAll("[data-fmt]").forEach((b) => {
+      let on = false;
+      if (milik) {
+        if (b.dataset.fmt === "b") on = document.queryCommandState("bold");
+        if (b.dataset.fmt === "i") on = document.queryCommandState("italic");
+        if (b.dataset.fmt === "h") on = blok === "H2";
+        if (b.dataset.fmt === "h2") on = blok === "H3";
+      }
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  });
+}
+document.addEventListener("selectionchange", perbaruiTombol);
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-fmt]");
+  if (!b) return;
+  const bar = b.closest(".rich-tools");
+  const ed = bar && bar.nextElementSibling;
+  if (!ed || !ed.classList.contains("editor")) return;
+  e.preventDefault();
+  if (editorAktif() !== ed) {             // belum ada kursor di kotak ini: taruh di akhir
+    ed.focus();
+    const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  }
+  const f = b.dataset.fmt;
+  if (f === "b") document.execCommand("bold");
+  else if (f === "i") document.execCommand("italic");
+  else {
+    if (!ed.innerHTML.trim()) { ed.innerHTML = "<div><br></div>"; const r = document.createRange(); r.setStart(ed.firstChild, 0); r.collapse(true); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+    const tag = f === "h" ? "H2" : "H3";
+    document.execCommand("formatBlock", false, blokSekarang(ed) === tag ? "<div>" : `<${tag.toLowerCase()}>`);
+  }
+  ed.dispatchEvent(new Event("input", { bubbles: true }));
+});
+// tombol format tidak mencuri kursor dari kotak tulisan
+document.addEventListener("mousedown", (e) => { if (e.target.closest("[data-fmt]")) e.preventDefault(); });
+document.addEventListener("click", (e) => {
+  const lab = e.target.closest("label.field");
+  if (!lab || e.target.closest(".editor, .rich-tools, input, select, button")) return;
+  const ta = lab.querySelector("textarea[data-rich]");
+  if (ta && ta._editor) ta._editor.focus();
+});
+enhanceRich($("fRingkasan"), "block");
+enhanceRich($("fPoin"), "poin");
+enhanceRich($("pasteInput"), "block");
+enhanceRich($("soalTanya"), "inline");
+enhanceRich($("soalJawabEsai"), "block");
+enhanceRich($("soalBahas"), "inline");
+
 function addSoalRow() {
   const id = ++rowSeq;
   addRow("fSoal", rowHead("Soal") + `
@@ -470,11 +734,13 @@ function addSoalRow() {
     ${[0, 1, 2, 3].map((i) => `<label class="opt-row"><input type="radio" name="benar-${id}" value="${i}" aria-label="Jawaban ${letter(i)} benar">
       <input type="text" class="s-opt" maxlength="300" placeholder="Pilihan ${letter(i)}"></label>`).join("")}
     <input type="text" class="s-bahas" maxlength="1500" placeholder="Pembahasan (boleh kosong)" style="margin-top:8px;width:100%">`);
+  enhanceAll($("fSoal"));
 }
 function addEsaiRow() {
   addRow("fEsai", rowHead("Esai") + `
     <textarea class="e-tanya" maxlength="1000" placeholder="Tulis pertanyaan esai..."></textarea>
     <textarea class="e-jawab" maxlength="3000" placeholder="Contoh jawabannya..."></textarea>`);
+  enhanceAll($("fEsai"));
 }
 $("addIstilah").addEventListener("click", addIstilahRow);
 $("addSoal").addEventListener("click", addSoalRow);
@@ -484,7 +750,28 @@ $("addEsai").addEventListener("click", addEsaiRow);
   if (!del) return;
   del.closest(".form-row").remove();
   renumber(boxId);
+  simpanDrafSegera();
 }));
+["addIstilah", "addSoal", "addEsai"].forEach((id) => $(id).addEventListener("click", () => simpanDrafSegera()));
+
+/* Judul modul: Enter = baris sub-judul baru (maks. 3), kotak ikut memanjang */
+const MAKS_BARIS_JUDUL = 4;
+function tinggiJudul() { const t = $("fJudul"); t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px"; }
+$("fJudul").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && $("fJudul").value.split("\n").filter((x) => x.trim()).length >= MAKS_BARIS_JUDUL) {
+    e.preventDefault(); toast("Sub-judul maksimal 3 baris ya.");
+  }
+});
+$("fJudul").addEventListener("input", () => {
+  const t = $("fJudul");
+  let baris = t.value.split("\n");
+  if (baris.length > MAKS_BARIS_JUDUL) {
+    baris = baris.filter((x, i) => x.trim() || i === baris.length - 1);   // buang baris kosong di tengah
+    if (baris.length > MAKS_BARIS_JUDUL) baris = baris.slice(0, MAKS_BARIS_JUDUL);
+    t.value = baris.join("\n");
+  }
+  tinggiJudul();
+});
 
 function resetForm() {
   const d = current();
@@ -496,11 +783,13 @@ function resetForm() {
   ["fJudul", "fRingkasan", "fPoin"].forEach((id) => ($(id).value = ""));
   ["fIstilah", "fSoal", "fEsai"].forEach((id) => ($(id).innerHTML = ""));
   addIstilahRow(); addIstilahRow(); addSoalRow(); addEsaiRow();
+  setTimeout(tinggiJudul, 0);
 }
 
 function collectForm() {
   const val = (id) => $(id).value.trim();
-  const mataKuliah = val("fMk"), judul = val("fJudul");
+  const judulBaris = $("fJudul").value.split("\n").map((x) => x.trim()).filter(Boolean);
+  const mataKuliah = val("fMk"), judul = judulBaris[0] || "", subjudul = judulBaris.slice(1, 4);
   if (!mataKuliah) throw new Error("Nama mata kuliah belum diisi.");
   if (!judul) throw new Error("Judul modul belum diisi.");
 
@@ -537,21 +826,120 @@ function collectForm() {
   });
 
   const ringkasan = val("fRingkasan");
-  const poin = $("fPoin").value.split("\n").map((p) => p.replace(/^\s*([-•*–]|\d+[.)])\s*/, "").trim()).filter(Boolean);
+  const poin = $("fPoin").value.split("\n").map((p) => p.replace(/^\s*([-•–]|\*(?=\s)|\d+[.)])\s+/, "").trim()).filter(Boolean);
   if (!ringkasan && !poin.length && !istilah.length && !soal.length && !esai.length) {
     throw new Error("Isi minimal salah satu: ringkasan, poin penting, istilah, atau soal.");
   }
   const tgl = val("fTgl");
   return {
     mataKuliah, kode: val("fKode"), tanggalUjian: tgl ? tgl + "T07:00" : "",
-    modul: [{ nomor: Number(val("fNomor")) || null, judul, ringkasan, poin, istilah, soal, esai }]
+    modul: [{ nomor: Number(val("fNomor")) || null, judul, subjudul, ringkasan, poin, istilah, soal, esai }]
   };
 }
 
+/* ---------- Simpan otomatis (draf) ---------- */
+const DRAF_MATERI = "demuse-belajar-draf-materi";
+const DRAF_SOAL = "demuse-belajar-draf-soal";
+const adaIsi = (...xs) => xs.some((x) => String(x ?? "").trim());
+
+function ambilDrafMateri() {
+  const rows = (id) => [...$(id).querySelectorAll(".form-row")];
+  return {
+    mode: importMode,
+    mk: $("fMk").value, kode: $("fKode").value, tgl: $("fTgl").value, nomor: $("fNomor").value,
+    judul: $("fJudul").value, ringkasan: $("fRingkasan").value, poin: $("fPoin").value,
+    istilah: rows("fIstilah").map((r) => [r.querySelector(".i-kata").value, r.querySelector(".i-arti").value]),
+    soal: rows("fSoal").map((r) => ({
+      t: r.querySelector(".s-tanya").value,
+      o: [...r.querySelectorAll(".s-opt")].map((x) => x.value),
+      b: (r.querySelector('input[type="radio"]:checked') || {}).value ?? null,
+      p: r.querySelector(".s-bahas").value
+    })),
+    esai: rows("fEsai").map((r) => [r.querySelector(".e-tanya").value, r.querySelector(".e-jawab").value]),
+    tempel: $("pasteInput").value
+  };
+}
+function drafMateriBerisi(d) {
+  if (!d || typeof d !== "object") return false;
+  return adaIsi(d.judul, d.ringkasan, d.poin) || tempelBerisi(d.tempel) ||
+    (d.istilah || []).some((r) => adaIsi(...r)) ||
+    (d.soal || []).some((x) => adaIsi(x.t, x.p, ...(x.o || []))) ||
+    (d.esai || []).some((r) => adaIsi(...r));
+}
+function pulihkanDrafMateri(d) {
+  resetForm();
+  ["mk", "kode", "tgl", "nomor", "judul", "ringkasan", "poin"].forEach((k) => {
+    const id = { mk: "fMk", kode: "fKode", tgl: "fTgl", nomor: "fNomor", judul: "fJudul", ringkasan: "fRingkasan", poin: "fPoin" }[k];
+    if (d[k] != null && (d[k] !== "" || ["judul", "ringkasan", "poin"].includes(k))) $(id).value = d[k];
+  });
+  if ((d.istilah || []).length) {
+    $("fIstilah").innerHTML = "";
+    d.istilah.forEach(([k, a]) => { addIstilahRow(); const r = $("fIstilah").lastElementChild; r.querySelector(".i-kata").value = k || ""; r.querySelector(".i-arti").value = a || ""; });
+  }
+  if ((d.soal || []).length) {
+    $("fSoal").innerHTML = "";
+    d.soal.forEach((x) => {
+      addSoalRow(); const r = $("fSoal").lastElementChild;
+      r.querySelector(".s-tanya").value = x.t || "";
+      r.querySelectorAll(".s-opt").forEach((inp, i) => (inp.value = (x.o || [])[i] || ""));
+      if (x.b != null) { const rb = r.querySelector(`input[type="radio"][value="${Number(x.b)}"]`); if (rb) rb.checked = true; }
+      r.querySelector(".s-bahas").value = x.p || "";
+    });
+  }
+  if ((d.esai || []).length) {
+    $("fEsai").innerHTML = "";
+    d.esai.forEach(([t, j]) => { addEsaiRow(); const r = $("fEsai").lastElementChild; r.querySelector(".e-tanya").value = t || ""; r.querySelector(".e-jawab").value = j || ""; });
+  }
+  $("pasteInput").value = d.tempel || "";
+  setTimeout(tinggiJudul, 0);
+}
+let drafTimer = null;
+function tandaiTersimpan(id) {
+  const el = $(id); if (!el) return;
+  el.textContent = "✓ Tersimpan otomatis";
+  el.classList.add("show");
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("show"), 1800);
+}
+function simpanDrafSegera() {
+  if ($("importModal").classList.contains("hidden")) return;
+  clearTimeout(drafTimer);
+  drafTimer = setTimeout(() => {
+    const d = ambilDrafMateri();
+    writeStore(DRAF_MATERI, drafMateriBerisi(d) ? d : null);
+    if (drafMateriBerisi(d)) tandaiTersimpan("autosaveMateri");
+  }, 400);
+}
+const hapusDrafMateri = () => { clearTimeout(drafTimer); writeStore(DRAF_MATERI, null); };
+$("importModal").addEventListener("input", simpanDrafSegera);
+$("importModal").addEventListener("change", simpanDrafSegera);
+$("draftClear").addEventListener("click", () => {
+  if (!confirm("Hapus semua isian ini dan mulai dari kosong?")) return;
+  hapusDrafMateri();
+  resetForm();
+  $("pasteInput").value = "";
+  $("draftNote").classList.add("hidden");
+  showMsg("importMsg", "");
+});
+
 /* ---------- Pilih cara (formulir / tempel) ---------- */
 let importMode = "form";
+function templatTempel() {
+  const d = current();
+  const nomor = d ? Math.max(0, ...d.modul.map((m) => m.nomor)) + 1 : 1;
+  return `MATA KULIAH: ${d ? d.mataKuliah : ""}\nMODUL ${nomor}: `;
+}
+const tempelBerisi = (t) => String(t || "").split("\n").some((l) => l.trim() && !/^(mata\s*kuliah|modul\s+\d+)\s*:\s*.*$/i.test(l.trim()) ) ||
+  /modul\s+\d+\s*:\s*\S/i.test(String(t || ""));
 function setMode(mode) {
   importMode = mode;
+  if (mode === "tempel" && !$("pasteInput").value.trim()) {
+    const t = templatTempel();
+    $("pasteInput").value = t + "\n\n";
+    setTimeout(() => {      // kursor di akhir baris MODUL, siap mengetik judul modul
+      const ed = $("pasteInput")._editor; if (!ed || !ed.children[1]) return;
+      try { ed.focus(); const r = document.createRange(); r.selectNodeContents(ed.children[1]); r.collapse(false); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (e) {}
+    }, 50);
+  }
   document.querySelectorAll(".mode-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
   $("modeForm").classList.toggle("hidden", mode !== "form");
   $("modeTempel").classList.toggle("hidden", mode !== "tempel");
@@ -559,29 +947,35 @@ function setMode(mode) {
   $("saveImport").classList.toggle("hidden", mode === "file");
   showMsg("importMsg", "");
 }
-document.querySelectorAll(".mode-btn").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+document.querySelectorAll(".mode-btn").forEach((b) => b.addEventListener("click", () => { setMode(b.dataset.mode); simpanDrafSegera(); }));
 
 function openImport() {
-  resetForm();
-  $("pasteInput").value = ""; $("fileInput").value = "";
-  setMode("form");
+  const draf = readStore(DRAF_MATERI, null);
+  $("fileInput").value = "";
+  if (drafMateriBerisi(draf)) {
+    pulihkanDrafMateri(draf);
+    setMode(draf.mode === "tempel" ? "tempel" : "form");
+    $("draftNote").classList.remove("hidden");
+  } else {
+    resetForm();
+    $("pasteInput").value = "";
+    setMode("form");
+    $("draftNote").classList.add("hidden");
+  }
   openModal("importModal");
   $("importModal").scrollTop = 0;
 }
 document.querySelectorAll("[data-open-import]").forEach((b) => b.addEventListener("click", openImport));
 
-$("contohSusunan").textContent = CONTOH_SUSUNAN;
-$("copyContoh").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(CONTOH_SUSUNAN); toast("✅ Contoh susunan tersalin. Ganti isinya dengan catatan kalian."); }
-  catch (e) { toast("Silakan tekan lama tulisan contohnya, lalu salin."); }
-});
-
 /* ---------- Cara 2: tempel catatan / file ---------- */
 function tryImport(text) {
   try {
-    const data = normalize(bacaMateri(text));
+    const raw = bacaMateri(text);
+    const d = current();
+    if (d && raw && !Array.isArray(raw) && !String(raw.mataKuliah || "").trim()) { raw.mataKuliah = d.mataKuliah; raw.kode = raw.kode || d.kode; }
+    const data = normalize(raw);
     closeModal("importModal");
-    chooseDestination(data);
+    chooseDestination(data, true);
   } catch (err) {
     showMsg("importMsg", "😕 " + err.message);
   }
@@ -632,12 +1026,12 @@ function barisKeParagraf(lines) {
     if (/[.!?:]["')\]]?$/.test(line) && cur.length > 220) tutup();
   });
   tutup();
-  return paras.filter((p) => p.length >= 20).flatMap((p) => potongParagraf(p));
+  return paras.filter((p) => p.trim().length >= 2);
 }
 
 function paragrafKeMateri(paras, judul) {
   if (!paras.length) throw new Error("Tidak ada tulisan yang bisa dibaca di file ini. Kalau file-nya hasil scan/foto, silakan ketik materinya di formulir.");
-  return { mataKuliah: judul, modul: [{ judul, ringkasan: paras[0], poin: paras.slice(1) }] };
+  return { mataKuliah: judul, modul: [{ judul, ringkasan: paras.join("\n\n"), poin: [] }] };
 }
 
 async function bacaPdf(file) {
@@ -758,7 +1152,7 @@ $("saveImport").addEventListener("click", () => {
     try {
       const data = normalize(collectForm());
       closeModal("importModal");
-      chooseDestination(data);
+      chooseDestination(data, true);
     } catch (err) {
       showMsg("importMsg", "😕 " + err.message);
       $("importMsg").scrollIntoView({ block: "nearest" });
@@ -766,7 +1160,9 @@ $("saveImport").addEventListener("click", () => {
     return;
   }
   const text = $("pasteInput").value.trim();
-  if (!text) { showMsg("importMsg", "Kotaknya masih kosong. Tempel dulu catatan kalian ya."); return; }
+  if (!text || !String(text).split("\n").some((l) => l.trim() && !/^(mata\s*kuliah|modul\s+\d+)\s*:/i.test(l.trim()))) {
+    showMsg("importMsg", "Materinya belum ada. Tempel materi kalian di bawah baris MODUL ya."); return;
+  }
   tryImport(text);
 });
 window.addEventListener("dragover", (e) => e.preventDefault());
@@ -800,7 +1196,7 @@ $("deleteBtn").addEventListener("click", () => {
   delete library.subjects[library.active];
   library.active = Object.keys(library.subjects)[0] || null;
   saveLibrary();
-  renderAll();
+  tampilkanBeranda();
 });
 
 /* ============================================================
@@ -819,7 +1215,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
    COUNTDOWN
    ============================================================ */
 function tickCountdown() {
-  const box = $("countdown"); const d = current();
+  const box = $("countdown"); const d = tampilan === "materi" ? current() : null;
   if (!d || !d.tanggalUjian) { box.innerHTML = ""; return; }
   const diff = new Date(d.tanggalUjian) - new Date();
   if (isNaN(diff)) { box.innerHTML = ""; return; }
@@ -838,18 +1234,60 @@ function highlight(text, q) {
   const re = new RegExp("(" + esc(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
   return safe.replace(re, "<mark>$1</mark>");
 }
+/* ---------- Format tulisan: ## Judul, ### Sub-judul, **tebal**, *miring* ---------- */
+function fmtInline(html) {
+  return html
+    .replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*\w])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])/g, "$1<em>$2</em>")
+    .replace(/(^|[^*\w])\*(?=[^\s*])([^*\n])\*(?![\w*])/g, "$1<em>$2</em>");
+}
+function richInline(text, q = "") { return fmtInline(highlight(String(text ?? ""), q)).replace(/\n/g, "<br>"); }
+function richBlock(text, q = "") {
+  const out = []; let para = [], daftar = [];
+  const flushPara = () => { if (para.length) { out.push(`<p>${para.map((l) => richInline(l, q)).join("<br>")}</p>`); para = []; } };
+  const tutupDaftar = () => { if (daftar.length) { out.push(`<ul>${daftar.map((l) => `<li>${richInline(l, q)}</li>`).join("")}</ul>`); daftar = []; } };
+  const flush = () => { flushPara(); tutupDaftar(); };
+  String(text ?? "").split("\n").forEach((raw) => {
+    const t = raw.trim(); let m;
+    if (!t || /^#{1,3}$/.test(t)) { flush(); return; }
+    if ((m = t.match(/^###\s+(.+)/))) { flush(); out.push(`<h6 class="rsub">${richInline(m[1], q)}</h6>`); return; }
+    if ((m = t.match(/^#{1,2}\s+(.+)/))) { flush(); out.push(`<h5 class="rhead">${richInline(m[1], q)}</h5>`); return; }
+    if ((m = t.match(/^([-•–]|\*(?=\s))\s+(.+)/))) { flushPara(); daftar.push(m[2]); return; }
+    tutupDaftar();
+    para.push(t);
+  });
+  flush();
+  return out.join("");
+}
+function richPoin(list, q = "") {
+  let html = "", open = false;
+  list.forEach((p) => {
+    if (/^#{1,3}\s*$/.test(String(p).trim())) return;
+    const m = String(p).match(/^(#{1,3})\s+(.+)/);
+    if (m) {
+      if (open) { html += "</ul>"; open = false; }
+      html += m[1].length === 3 ? `<h6 class="rsub">${richInline(m[2], q)}</h6>` : `<h5 class="rhead">${richInline(m[2], q)}</h5>`;
+    } else {
+      if (!open) { html += "<ul>"; open = true; }
+      html += `<li>${richInline(p, q)}</li>`;
+    }
+  });
+  if (open) html += "</ul>";
+  return html;
+}
+
 function renderRingkasan(q = "") {
   const query = q.trim().toLowerCase();
   const html = current().modul.map((m) => {
-    const all = [m.judul, m.ringkasan, ...m.poin, ...m.istilah.flatMap((t) => [t.kata, t.arti])].join(" ").toLowerCase();
+    const all = [m.judul, ...(m.subjudul || []), m.ringkasan, ...m.poin, ...m.istilah.flatMap((t) => [t.kata, t.arti])].join(" ").toLowerCase();
     if (query && !all.includes(query)) return "";
     return `
       <details class="card modul" ${query ? "open" : ""}>
-        <summary><div><span class="num">MODUL ${m.nomor}</span><h3>${highlight(m.judul, query)}</h3></div></summary>
+        <summary><div><span class="num">MODUL ${m.nomor}</span><h3>${highlight(m.judul, query)}</h3>${(m.subjudul || []).map((sj) => `<span class="subjudul">${highlight(sj, query)}</span>`).join("")}</div></summary>
         <div class="modul-body">
-          ${m.ringkasan ? `<p>${highlight(m.ringkasan, query)}</p>` : ""}
-          ${m.poin.length ? `<h4>📌 Poin penting</h4><ul>${m.poin.map((p) => `<li>${highlight(p, query)}</li>`).join("")}</ul>` : ""}
-          ${m.istilah.length ? `<h4>🔑 Istilah</h4><div class="istilah-grid">${m.istilah.map((t) => `<div class="istilah-item"><b>${highlight(t.kata, query)}</b> — ${highlight(t.arti, query)}</div>`).join("")}</div>` : ""}
+          ${m.ringkasan ? `<div class="rich">${richBlock(m.ringkasan, query)}</div>` : ""}
+          ${m.poin.length ? `<h4>📌 Poin penting</h4><div class="rich">${richPoin(m.poin, query)}</div>` : ""}
+          ${m.istilah.length ? `<h4>🔑 Istilah</h4><div class="istilah-grid">${m.istilah.map((t) => `<div class="istilah-item"><b>${richInline(t.kata, query)}</b> — ${richInline(t.arti, query)}</div>`).join("")}</div>` : ""}
         </div>
       </details>`;
   }).join("");
@@ -860,12 +1298,163 @@ $("searchInput").addEventListener("input", (e) => renderRingkasan(e.target.value
 const inFilter = (f, nomor) => f === "all" || String(nomor) === String(f);
 
 /* ============================================================
+   SOAL & KARTU HAFALAN OTOMATIS (tanpa AI, pakai aturan)
+   - Pengertian: kalimat "X adalah/merupakan/yaitu Y" dan baris "X: Y"
+   - Soal pengertian: "Apa yang dimaksud dengan X?" (pilihan = pengertian lain)
+   - Soal lengkapi kalimat: satu kata penting dikosongkan
+   - Esai: dari istilah dan judul bagian
+   ============================================================ */
+const STOP = new Set(("yang dan di ke dari untuk dengan pada adalah merupakan dalam atau ini itu oleh sebagai juga karena akan dapat " +
+  "tidak ada lebih para serta secara bahwa setiap telah sudah harus bisa mereka kita kami yaitu ialah antara tersebut hal " +
+  "sangat maka agar saat suatu sebuah seperti namun tetapi jika bila hanya masih sendiri tentang terhadap melalui bagi kepada " +
+  "sehingga menjadi memiliki banyak beberapa semua dimana bagaimana mengapa kapan siapa begitu pula hingga sampai setelah " +
+  "sebelum sedang selalu sering kali pertama kedua ketiga lain lainnya berbagai biasanya disebut dilakukan melakukan " +
+  "the and of to in is are for with that this from which their there these those about").split(" "));
+const polos = (t) => String(t ?? "").replace(/^\s*#{1,3}\s*/, "").replace(/\*\*|__/g, "").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1$2").replace(/\s+/g, " ").trim();
+const huruf1 = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+const singkat = (t, n = 190) => (t.length > n ? t.slice(0, n).replace(/\s+\S*$/, "") + "…" : t);
+function acakBenih(teks) {          // angka acak yang selalu sama untuk teks yang sama
+  let h = 1779033703 ^ teks.length;
+  for (let i = 0; i < teks.length; i++) { h = Math.imul(h ^ teks.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+  return () => { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
+}
+const acakDengan = (arr, r) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+function kalimatModul(m) {
+  const sumber = [...String(m.ringkasan || "").split("\n"), ...m.poin].filter((t) => !/^\s*#/.test(t)).map(polos).filter(Boolean);
+  return sumber.flatMap((t) => t.split(/(?<=[.!?])\s+(?=[A-Z0-9"“(])/)).map((k) => k.trim()).filter((k) => k.length >= 35 && k.length <= 260 && k.split(/\s+/).length >= 7 && !/:$/.test(k));
+}
+const otoCache = new Map();
+function istilahOtomatis(m) {
+  const key = "i|" + m.judul + "|" + m.ringkasan + "|" + m.poin.join("|");
+  if (otoCache.has(key)) return otoCache.get(key);
+  const out = [], seen = new Set(m.istilah.map((t) => polos(t.kata).toLowerCase()));
+  const add = (k, a) => {
+    k = polos(k).replace(/^(yang dimaksud dengan|pengertian( dari)?|definisi( dari)?|arti( dari)?)\s+/i, "").replace(/[:,;.]+$/, "").trim();
+    a = polos(a).replace(/^[:\-–\s]+/, "").trim();
+    const low = k.toLowerCase();
+    if (k.length < 3 || k.split(/\s+/).length > 6 || a.length < 12 || seen.has(low) || /^(ini|itu|hal|dia|mereka|hal ini|tujuannya)$/i.test(k)) return;
+    seen.add(low);
+    out.push({ kata: huruf1(k), arti: huruf1(a), otomatis: true });
+  };
+  kalimatModul(m).forEach((k) => {
+    const x = k.match(/^(.{3,70}?)\s+(?:adalah|merupakan|ialah|yaitu|didefinisikan sebagai|diartikan sebagai)\s+(.{12,})$/i);
+    if (x && !/[,;]/.test(x[1])) add(x[1], x[2]);
+  });
+  [...String(m.ringkasan || "").split("\n"), ...m.poin].forEach((p) => {
+    if (/^\s*#/.test(p)) return;
+    const x = polos(p).replace(/^([-•–]|\d+[.)])\s+/, "").match(/^([^:]{3,50}):\s+(.{12,300})$/);
+    if (x) add(x[1], x[2]);
+  });
+  const hasil = out.slice(0, 15);
+  otoCache.set(key, hasil);
+  return hasil;
+}
+const semuaIstilah = (m) => [...m.istilah, ...istilahOtomatis(m)];
+
+function konteksKuis(d) {
+  const istilah = d.modul.flatMap(semuaIstilah).map((t) => ({ kata: polos(t.kata), arti: polos(t.arti) }));
+  const kata = new Map();
+  const istilahKata = new Set(istilah.map((t) => t.kata.toLowerCase()));
+  d.modul.forEach((m) => kalimatModul(m).forEach((k) => (k.match(/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9-]*|\d[\d.,%]*/g) || []).forEach((w, i) => {
+    const low = w.toLowerCase();
+    if (i === 0 && !istilahKata.has(low)) return;          // kata awal kalimat (Berikut, Keputusan...) bukan pilihan yang baik
+    if (!STOP.has(low) && (w.length >= 5 || /\d/.test(w))) kata.set(low, w);
+  })));
+  return { istilah, kata: [...kata.values()], istilahKata };
+}
+
+function kataKunci(k, penting) {
+  const words = k.match(/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9-]*|\d[\d.,%]*/g) || [];
+  let best = null, skor = -1;
+  words.forEach((w, i) => {
+    const low = w.toLowerCase();
+    if (STOP.has(low) || (w.length < 5 && !/\d/.test(w))) return;
+    let sc = Math.min(w.length, 12);
+    if (penting.has(low)) sc += 8;
+    if (i > 0 && /^[A-Z]/.test(w)) sc += 4;
+    if (/\d/.test(w)) sc += 3;
+    if (i === 0) sc -= 3;
+    if (sc > skor) { skor = sc; best = w; }
+  });
+  return best;
+}
+const reKata = (w) => new RegExp(`(^|[^A-Za-zÀ-ÿ0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-zÀ-ÿ0-9])`);
+
+function soalOtomatis(m, ctx) {
+  const key = "s|" + m.nomor + "|" + m.judul + "|" + m.ringkasan + "|" + m.poin.join("|") + "|" + ctx.istilah.length + "|" + ctx.kata.length;
+  if (otoCache.has(key)) return otoCache.get(key);
+  const r = acakBenih(key);
+  const hasil = [], sudah = new Set(m.soal.map((s) => polos(s.tanya).toLowerCase()));
+  const pilihanJadi = (benar, salah) => {
+    const opsi = acakDengan([benar, ...salah.slice(0, 3)], r);
+    return { pilihan: opsi, jawaban: opsi.indexOf(benar) };
+  };
+  // 1) soal pengertian
+  const milik = semuaIstilah(m).map((t) => ({ kata: polos(t.kata), arti: polos(t.arti) }));
+  milik.slice(0, 5).forEach((t, i) => {
+    const lainArti = acakDengan(ctx.istilah.filter((x) => x.kata.toLowerCase() !== t.kata.toLowerCase() && x.arti !== t.arti).map((x) => singkat(x.arti)), r);
+    const lainKata = acakDengan(ctx.istilah.filter((x) => x.kata.toLowerCase() !== t.kata.toLowerCase()).map((x) => x.kata), r);
+    if (i % 2 === 0 && lainArti.length >= 3) {
+      const tanya = `Apa yang dimaksud dengan **${t.kata}**?`;
+      if (!sudah.has(polos(tanya).toLowerCase())) hasil.push({ tanya, ...pilihanJadi(singkat(t.arti), [...new Set(lainArti)]), pembahasan: `${t.kata} adalah ${t.arti.replace(/^[A-Z]/, (c) => c.toLowerCase())}` });
+    } else if (lainKata.length >= 3) {
+      hasil.push({ tanya: `Istilah yang tepat untuk pengertian berikut adalah...\n"${singkat(t.arti, 220)}"`, ...pilihanJadi(t.kata, [...new Set(lainKata)]), pembahasan: `Pengertian tersebut adalah pengertian dari **${t.kata}**.` });
+    }
+  });
+  // 2) soal lengkapi kalimat
+  const penting = new Set(milik.flatMap((t) => t.kata.toLowerCase().split(/\s+/)));
+  const pakai = new Set();
+  acakDengan(kalimatModul(m), r).forEach((k) => {
+    if (hasil.length >= 8) return;
+    const w = kataKunci(k, penting);
+    if (!w || pakai.has(w.toLowerCase())) return;
+    const angka = /\d/.test(w), besar = /^[A-Z]/.test(w);
+    const isiKalimat = new Set((k.match(/[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9-]*/g) || []).map((x) => x.toLowerCase()));
+    const kelas = (x) => (/^(me|ber|di|ter|ke)[a-z]{3,}/i.test(x) && !ctx.istilahKata.has(x.toLowerCase()) ? "kerja" : "benda");
+    const cocok = (x) => x.toLowerCase() !== w.toLowerCase() && !isiKalimat.has(x.toLowerCase()) && /\d/.test(x) === angka && (angka || /^[A-Z]/.test(x) === besar);
+    let calon = ctx.istilahKata.has(w.toLowerCase())
+      ? ctx.istilah.map((t) => (besar ? t.kata : t.kata.toLowerCase())).filter((x) => !/\s/.test(x) && x.toLowerCase() !== w.toLowerCase() && !isiKalimat.has(x.toLowerCase()))
+      : [];
+    if (calon.length < 3) {
+      const semua = ctx.kata.filter(cocok);
+      const sejenis = semua.filter((x) => kelas(x) === kelas(w));
+      calon = [...new Set([...calon, ...(sejenis.length >= 3 ? sejenis : semua)])];
+    }
+    const salah = acakDengan(calon, r).sort((a, b) => Math.abs(a.length - w.length) - Math.abs(b.length - w.length)).slice(0, 6);
+    const tiga = acakDengan(salah, r).slice(0, 3);
+    if (tiga.length < 3) return;
+    pakai.add(w.toLowerCase());
+    const kosong = k.replace(reKata(w), "$1_______");
+    const lengkap = k.replace(reKata(w), "$1**" + w + "**");
+    hasil.push({ tanya: `Lengkapi kalimat berikut:\n"${kosong}"`, ...pilihanJadi(w, tiga), pembahasan: `Kalimat lengkapnya: "${lengkap}"` });
+  });
+  otoCache.set(key, hasil);
+  return hasil;
+}
+
+function esaiOtomatis(m) {
+  const out = [];
+  semuaIstilah(m).slice(0, 2).forEach((t) => out.push({ tanya: `Jelaskan apa yang dimaksud dengan **${polos(t.kata)}**!`, jawaban: polos(t.arti) }));
+  // dari judul bagian (##) di poin penting
+  let judul = null, isi = [];
+  const tutup = () => { if (judul && isi.length && out.length < 4) out.push({ tanya: `Jelaskan tentang **${judul}**!`, jawaban: singkat(isi.join(" "), 900) }); judul = null; isi = []; };
+  [...String(m.ringkasan || "").split("\n"), ...m.poin].forEach((p) => { if (!p.trim()) return; if (/^\s*#{1,3}\s/.test(p)) { tutup(); judul = polos(p); } else if (judul) isi.push(polos(p)); });
+  tutup();
+  if (!out.length && (m.ringkasan || m.poin.length)) {
+    out.push({ tanya: `Jelaskan isi materi **${m.judul}** dengan kata-kata kalian sendiri!`, jawaban: singkat(polos(m.ringkasan || m.poin.join(" ")), 900) });
+  }
+  const sudah = new Set(m.esai.map((s) => polos(s.tanya).toLowerCase()));
+  return out.filter((s) => !sudah.has(polos(s.tanya).toLowerCase())).slice(0, 3);
+}
+
+/* ============================================================
    KARTU HAFALAN
    ============================================================ */
 let cards = [], fcIndex = 0;
 function buildCards() {
   const f = $("fcFilter").value;
-  cards = current().modul.flatMap((m) => (inFilter(f, m.nomor) ? m.istilah : []));
+  cards = current().modul.flatMap((m) => (inFilter(f, m.nomor) ? semuaIstilah(m) : []));
   fcIndex = 0; showCard();
 }
 function showCard() {
@@ -875,7 +1464,7 @@ function showCard() {
     $("fcBack").textContent = "Modul ini belum punya daftar istilah.";
     $("fcCount").textContent = "0 / 0"; return;
   }
-  setTimeout(() => { $("fcFront").textContent = cards[fcIndex].kata; $("fcBack").textContent = cards[fcIndex].arti; }, 150);
+  setTimeout(() => { $("fcFront").innerHTML = richInline(cards[fcIndex].kata); $("fcBack").innerHTML = richInline(cards[fcIndex].arti); }, 150);
   $("fcCount").textContent = `${fcIndex + 1} / ${cards.length}`;
 }
 $("fcCard").addEventListener("click", () => $("fcCard").classList.toggle("flipped"));
@@ -928,26 +1517,30 @@ async function laporkan(tipe, id) {
 let quiz = [], answered = 0, correct = 0;
 function buildQuiz(random = false) {
   const f = $("quizFilter").value;
-  const src = hasApi() ? $("quizSource").value : "ai";
-  const ai = src === "teman" ? [] : current().modul.flatMap((m) => (inFilter(f, m.nomor) ? m.soal.map((s) => ({ ...s, modul: m.nomor })) : []));
-  const teman = src === "ai" ? [] : temanSoal().filter((s) => s.tipe === "pg" && inFilter(f, s.nomorModul))
+  const src = $("quizSource").value || "all";
+  const d = current();
+  const ai = src === "all" || src === "ai" ? d.modul.flatMap((m) => (inFilter(f, m.nomor) ? m.soal.map((s) => ({ ...s, modul: m.nomor })) : [])) : [];
+  const ctx = src === "all" || src === "auto" ? konteksKuis(d) : null;
+  const auto = ctx ? d.modul.flatMap((m) => (inFilter(f, m.nomor) ? soalOtomatis(m, ctx).map((s) => ({ ...s, modul: m.nomor, auto: true })) : [])) : [];
+  const teman = !(src === "all" || src === "teman") ? [] : temanSoal().filter((s) => s.tipe === "pg" && inFilter(f, s.nomorModul))
     .map((s) => ({ tanya: s.tanya, pilihan: s.pilihan, jawaban: s.jawaban, pembahasan: s.pembahasan, modul: s.nomorModul, dari: s.nama, id: s.id }));
-  quiz = [...ai, ...teman];
+  quiz = [...ai, ...auto, ...teman];
   if (random) quiz = shuffle(quiz);
   answered = 0; correct = 0; renderQuiz();
 }
 function renderQuiz() {
   if (!quiz.length) {
-    const src = hasApi() ? $("quizSource").value : "ai";
-    $("quizList").innerHTML = `<div class="card empty">${src === "teman" ? "Belum ada soal dari teman untuk pilihan ini. Yuk jadi yang pertama membuat soal! ✍️" : "Belum ada soal pilihan ganda."}</div>`;
+    const src = $("quizSource").value;
+    $("quizList").innerHTML = `<div class="card empty">${src === "teman" ? "Belum ada soal dari teman untuk pilihan ini. Yuk jadi yang pertama membuat soal! ✍️" :
+      src === "auto" ? "Materinya masih terlalu sedikit untuk dibuatkan soal otomatis. Tambahkan ringkasan atau poin penting yang lebih lengkap." : "Belum ada soal pilihan ganda."}</div>`;
     updateScore(); return;
   }
   $("quizList").innerHTML = quiz.map((q, qi) => `
     <div class="card q-card" data-q="${qi}">
-      <div class="q-meta">SOAL ${qi + 1} · MODUL ${esc(q.modul)}${q.dari ? `<span class="by">✍️ dari ${esc(q.dari)}</span>` : ""}</div>
-      <p class="q-text">${esc(q.tanya)}</p>
-      ${q.pilihan.map((p, pi) => `<button class="opt" data-p="${pi}">${String.fromCharCode(65 + pi)}. ${esc(p)}</button>`).join("")}
-      <div class="explain">${q.pembahasan ? "💬 " + esc(q.pembahasan) : "✅ Jawaban benar sudah ditandai hijau."}</div>
+      <div class="q-meta">SOAL ${qi + 1} · MODUL ${esc(q.modul)}${q.dari ? `<span class="by">✍️ dari ${esc(q.dari)}</span>` : ""}${q.auto ? `<span class="by auto">⚙️ otomatis</span>` : ""}</div>
+      <p class="q-text">${richInline(q.tanya)}</p>
+      ${q.pilihan.map((p, pi) => `<button class="opt" data-p="${pi}">${String.fromCharCode(65 + pi)}. ${richInline(p)}</button>`).join("")}
+      <div class="explain">${q.pembahasan ? "💬 " + richInline(q.pembahasan) : "✅ Jawaban benar sudah ditandai hijau."}</div>
       ${q.id ? `<button class="link-btn" data-lapor="${esc(q.id)}">⚠️ Laporkan soal salah</button>` : ""}
     </div>`).join("");
   updateScore();
@@ -980,16 +1573,17 @@ $("quizReset").addEventListener("click", () => buildQuiz());
    ============================================================ */
 function renderEsai() {
   const ai = current().modul.flatMap((m) => m.esai.map((s) => ({ ...s, modul: m.nomor })));
+  const auto = current().modul.flatMap((m) => esaiOtomatis(m).map((s) => ({ ...s, modul: m.nomor, auto: true })));
   const teman = temanSoal().filter((s) => s.tipe === "esai").map((s) => ({ tanya: s.tanya, jawaban: s.jawaban, modul: s.nomorModul, dari: s.nama, id: s.id }));
-  const items = [...ai, ...teman].sort((a, b) => a.modul - b.modul);
+  const items = [...ai, ...auto, ...teman].sort((a, b) => a.modul - b.modul);
   if (!items.length) { $("esaiList").innerHTML = `<div class="card empty">Belum ada soal esai.</div>`; return; }
   $("esaiList").innerHTML = items.map((s, i) => `
     <div class="card q-card">
-      <div class="q-meta">ESAI ${i + 1} · MODUL ${esc(s.modul)}${s.dari ? `<span class="by">✍️ dari ${esc(s.dari)}</span>` : ""}</div>
-      <p class="q-text">${esc(s.tanya)}</p>
+      <div class="q-meta">ESAI ${i + 1} · MODUL ${esc(s.modul)}${s.dari ? `<span class="by">✍️ dari ${esc(s.dari)}</span>` : ""}${s.auto ? `<span class="by auto">⚙️ otomatis</span>` : ""}</div>
+      <p class="q-text">${richInline(s.tanya)}</p>
       <textarea placeholder="Tulis jawaban kalian di sini..."></textarea>
       <button class="btn primary" data-esai="${i}">Lihat contoh jawaban</button>
-      <div class="esai-answer" id="esai-${i}">✅ ${esc(s.jawaban || "Belum ada contoh jawaban.")}</div>
+      <div class="esai-answer rich" id="esai-${i}">✅ ${richBlock(s.jawaban || "Belum ada contoh jawaban.")}</div>
       ${s.id ? `<div><button class="link-btn" data-lapor="${esc(s.id)}">⚠️ Laporkan soal salah</button></div>` : ""}
     </div>`).join("");
 }
@@ -1023,9 +1617,50 @@ function openSoalForm(tipe) {
   $("soalNama").value = readStore(NAMA_KEY, "");
   showMsg("soalMsg", "");
   setSoalTipe(tipe === "esai" ? "esai" : "pg");
+  const draf = readStore(DRAF_SOAL, null);
+  const berisi = draf && adaIsi(draf.tanya, draf.jawab, draf.bahas, ...(draf.opts || []));
+  if (berisi && draf.kunci === courseKey(d)) {
+    setSoalTipe(draf.tipe === "esai" ? "esai" : "pg");
+    if ([...$("soalModul").options].some((o) => o.value === String(draf.modul))) $("soalModul").value = draf.modul;
+    $("soalTanya").value = draf.tanya || ""; $("soalJawabEsai").value = draf.jawab || ""; $("soalBahas").value = draf.bahas || "";
+    document.querySelectorAll(".pg-opt").forEach((inp, i) => (inp.value = (draf.opts || [])[i] || ""));
+    if (draf.benar != null) { const rb = document.querySelector(`input[name="soalBenar"][value="${Number(draf.benar)}"]`); if (rb) rb.checked = true; }
+    $("soalDraftNote").classList.remove("hidden");
+  } else {
+    $("soalDraftNote").classList.add("hidden");
+  }
   openModal("soalModal");
 }
 document.querySelectorAll("[data-open-soal]").forEach((b) => b.addEventListener("click", () => openSoalForm(b.dataset.openSoal)));
+let drafSoalTimer = null;
+function simpanDrafSoal() {
+  const d = current(); if (!d || $("soalModal").classList.contains("hidden")) return;
+  clearTimeout(drafSoalTimer);
+  drafSoalTimer = setTimeout(() => {
+    const draf = {
+      kunci: courseKey(d),
+      tipe: (document.querySelector('input[name="soalTipe"]:checked') || {}).value || "pg",
+      modul: $("soalModul").value,
+      tanya: $("soalTanya").value, jawab: $("soalJawabEsai").value, bahas: $("soalBahas").value,
+      opts: [...document.querySelectorAll(".pg-opt")].map((x) => x.value),
+      benar: (document.querySelector('input[name="soalBenar"]:checked') || {}).value ?? null
+    };
+    const berisi = adaIsi(draf.tanya, draf.jawab, draf.bahas, ...draf.opts);
+    writeStore(DRAF_SOAL, berisi ? draf : null);
+    if (berisi) tandaiTersimpan("autosaveSoal");
+  }, 400);
+}
+$("soalModal").addEventListener("input", (e) => { if (e.target.id === "soalNama") writeStore(NAMA_KEY, e.target.value.trim()); else simpanDrafSoal(); });
+$("soalModal").addEventListener("change", (e) => { if (e.target.id !== "soalNama") simpanDrafSoal(); });
+$("shareNama").addEventListener("input", (e) => writeStore(NAMA_KEY, e.target.value.trim()));
+$("soalDraftClear").addEventListener("click", () => {
+  if (!confirm("Hapus isian soal ini dan mulai dari kosong?")) return;
+  clearTimeout(drafSoalTimer); writeStore(DRAF_SOAL, null);
+  ["soalTanya", "soalJawabEsai", "soalBahas"].forEach((id) => ($(id).value = ""));
+  document.querySelectorAll(".pg-opt").forEach((x) => (x.value = ""));
+  document.querySelectorAll('input[name="soalBenar"]').forEach((x) => (x.checked = false));
+  $("soalDraftNote").classList.add("hidden");
+});
 document.querySelectorAll('input[name="soalTipe"]').forEach((r) => r.addEventListener("change", () => setSoalTipe(r.value)));
 
 $("soalSend").addEventListener("click", async () => {
@@ -1067,6 +1702,7 @@ $("soalSend").addEventListener("click", async () => {
     } else {
       toast("🎉 Terima kasih! Soal kalian akan tampil setelah dicek admin.");
     }
+    clearTimeout(drafSoalTimer); writeStore(DRAF_SOAL, null);
     closeModal("soalModal");
   } catch (err) {
     showMsg("soalMsg", "😕 " + errText(err));
@@ -1112,7 +1748,7 @@ $("shareSend").addEventListener("click", async () => {
   if (!picked.length) return showMsg("shareMsg", "Centang minimal satu modul.");
 
   const data = { ...d, modul: d.modul.filter((m) => picked.includes(m.nomor)) };
-  if (JSON.stringify(data).length > 380000) return showMsg("shareMsg", "Materinya terlalu besar. Coba bagikan sebagian modul dulu.");
+  if (JSON.stringify(data).length > 1900000) return showMsg("shareMsg", "Materinya sangat besar. Coba bagikan sebagian modul dulu.");
   writeStore(NAMA_KEY, nama);
   writeStore(JURUSAN_KEY, jurusan);
 
@@ -1121,7 +1757,8 @@ $("shareSend").addEventListener("click", async () => {
   try {
     const res = await apiPost({ aksi: "bagikan", nama, jurusan, kunci: courseKey(d), data });
     closeModal("shareModal");
-    toast(res.status === "tampil" ? "🎉 Terima kasih! Materi kalian sudah bisa dipakai teman-teman." : "🎉 Terima kasih! Materi kalian akan tampil setelah dicek admin.");
+    toast(res.status === "tampil" ? "🎉 Terkirim! Materi kalian sekarang tampil di Beranda, bagian Materi dari teman-teman." : "🎉 Terkirim! Materi kalian akan tampil di Beranda setelah dicek admin.");
+    muatBersama();
   } catch (err) {
     showMsg("shareMsg", "😕 " + errText(err));
   } finally {
@@ -1169,32 +1806,103 @@ function renderLibrary() {
       </div>
     </div>`).join("");
 }
-document.querySelectorAll("[data-open-library]").forEach((b) => b.addEventListener("click", () => {
-  if (!hasApi()) return;
-  $("libSearch").value = "";
-  openModal("libraryModal");
-  loadLibrary();
-}));
+document.querySelectorAll("[data-open-library]").forEach((b) => b.addEventListener("click", () => { if (hasApi()) keBersama(); }));
 $("libRefresh").addEventListener("click", loadLibrary);
 $("libJurusan").addEventListener("change", renderLibrary);
 $("libSearch").addEventListener("input", renderLibrary);
-$("libList").addEventListener("click", async (e) => {
+async function klikMateriBersama(e) {
   const lapor = e.target.closest("[data-lapor-materi]");
-  if (lapor) { if (await laporkan("materi", lapor.dataset.laporMateri)) { libItems = libItems.filter((x) => String(x.id) !== lapor.dataset.laporMateri); renderLibrary(); } return; }
+  if (lapor) {
+    if (await laporkan("materi", lapor.dataset.laporMateri)) {
+      libItems = libItems.filter((x) => String(x.id) !== lapor.dataset.laporMateri);
+      renderLibrary(); renderBersama();
+    }
+    return;
+  }
   const btn = e.target.closest("[data-ambil]");
   if (!btn || btn.disabled) return;
+  const label = btn.textContent;
   btn.disabled = true; btn.textContent = "⏳ Mengambil...";
   try {
     const res = await apiGet({ aksi: "ambil", id: btn.dataset.ambil });
     const data = normalize(res.data);
-    closeModal("libraryModal");
+    if (!$("libraryModal").classList.contains("hidden")) closeModal("libraryModal");
     chooseDestination(data);
   } catch (err) {
     toast("😕 " + errText(err));
   } finally {
-    btn.disabled = false; btn.textContent = "📥 Pakai materi ini";
+    btn.disabled = false; btn.textContent = label;
   }
-});
+}
+$("libList").addEventListener("click", klikMateriBersama);
+
+/* ---------- Materi dari teman-teman, tampil di Beranda (dikelompokkan per jurusan) ---------- */
+const BERSAMA_CACHE = "demuse-belajar-bersama-cache";
+let bersamaStatus = "belum";   // belum | memuat | siap | gagal
+async function muatBersama() {
+  if (!hasApi()) return;
+  bersamaStatus = "memuat"; renderBersama();
+  try {
+    const res = await apiGet({ aksi: "daftar" });
+    const dilaporkan = new Set(readStore(LAPOR_KEY, []));
+    libItems = (Array.isArray(res.data) ? res.data : []).filter((x) => !dilaporkan.has(String(x.id)));
+    writeStore(BERSAMA_CACHE, libItems);
+    bersamaStatus = "siap";
+  } catch (err) {
+    const simpanan = readStore(BERSAMA_CACHE, []);
+    if (!libItems.length && simpanan.length) libItems = simpanan;
+    bersamaStatus = libItems.length ? "siap" : "gagal";
+  }
+  renderBersama();
+}
+function renderBersama() {
+  const box = $("bersamaList"); if (!box || !hasApi()) return;
+  if (bersamaStatus === "memuat" && !libItems.length) { box.innerHTML = `<div class="empty">⏳ Memuat materi dari teman-teman...</div>`; return; }
+  if (bersamaStatus === "gagal") { box.innerHTML = `<div class="empty">😕 ${esc(PESAN_OFFLINE)}</div>`; return; }
+  const jurAll = [...new Set(libItems.map((x) => x.jurusan || "Lainnya"))].sort((a, b) => (a === "Lainnya") - (b === "Lainnya") || a.localeCompare(b));
+  const pilih = $("bJurusan").value;
+  $("bJurusan").innerHTML = `<option value="all">Semua jurusan</option>` + jurAll.map((j) => `<option value="${esc(j)}">${esc(j)}</option>`).join("");
+  $("bJurusan").value = jurAll.includes(pilih) ? pilih : "all";
+  const jurPilih = $("bJurusan").value;
+  const q = $("bSearch").value.trim().toLowerCase();
+  const items = libItems.filter((x) => (jurPilih === "all" || (x.jurusan || "Lainnya") === jurPilih) &&
+    (!q || [x.mataKuliah, x.kode, x.daftarModul, x.nama].join(" ").toLowerCase().includes(q)));
+  if (!libItems.length) { box.innerHTML = `<div class="empty">Belum ada materi yang dibagikan.<br>Bagikan materi kalian lewat tombol <b>📤 Bagikan</b> di halaman mata kuliah. 🌱</div>`; return; }
+  if (!items.length) { box.innerHTML = `<div class="empty">Tidak ada materi yang cocok.</div>`; return; }
+  const namaSaya = String(readStore(NAMA_KEY, "") || "").trim().toLowerCase();
+  const jurSaya = readStore(JURUSAN_KEY, "");
+  const punyaLokal = new Set(Object.values(library.subjects).flatMap((s) => [courseKey(s), slug(s.mataKuliah)]));
+  const grup = {};
+  items.forEach((x) => { (grup[x.jurusan || "Lainnya"] = grup[x.jurusan || "Lainnya"] || []).push(x); });
+  const urutan = Object.keys(grup).sort((a, b) => (b === jurSaya) - (a === jurSaya) || (a === "Lainnya") - (b === "Lainnya") || a.localeCompare(b));
+  const bukaSemua = urutan.length <= 3 || jurPilih !== "all" || q;
+  box.innerHTML = urutan.map((j) => `
+    <details class="b-group" ${bukaSemua || j === jurSaya ? "open" : ""}>
+      <summary><span>🎓 ${esc(j)}</span><span class="b-count">${grup[j].length} materi</span></summary>
+      <div class="b-grid">${grup[j].map((x) => {
+        const milikSaya = namaSaya && String(x.nama || "").trim().toLowerCase() === namaSaya;
+        const sudahAda = punyaLokal.has(slug(x.kode || x.mataKuliah)) || punyaLokal.has(slug(x.mataKuliah));
+        return `<div class="lib-card">
+          ${milikSaya ? `<span class="jur saya">⭐ Dibagikan oleh kalian</span>` : ""}${sudahAda ? `<span class="jur ada">✓ Ada di daftar kalian</span>` : ""}
+          <h3>${esc(x.mataKuliah)}${x.kode ? ` <small class="muted">(${esc(x.kode)})</small>` : ""}</h3>
+          <div class="lib-meta">${Number(x.jumlahModul) || 0} modul · oleh <b>${esc(x.nama || "Teman")}</b>${x.waktu ? " · " + esc(fmtTanggal(x.waktu)) : ""}</div>
+          ${x.daftarModul ? `<div class="lib-modules">${esc(x.daftarModul).split(" | ").join("<br>")}</div>` : ""}
+          <div class="row">
+            <button class="btn pink" data-ambil="${esc(x.id)}">📥 Pakai materi ini</button>
+            <button class="link-btn" data-lapor-materi="${esc(x.id)}">⚠️ Laporkan</button>
+          </div>
+        </div>`;
+      }).join("")}</div>
+    </details>`).join("");
+}
+$("bersamaList").addEventListener("click", klikMateriBersama);
+$("bJurusan").addEventListener("change", renderBersama);
+$("bSearch").addEventListener("input", renderBersama);
+$("bersamaRefresh").addEventListener("click", muatBersama);
+function keBersama() {
+  const lanjut = () => setTimeout(() => $("bersamaSection").scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  if (tampilan === "materi") { tampilkanBeranda(); setTimeout(lanjut, 150); } else lanjut();
+}
 
 /* ============================================================
    PROGRES
@@ -1240,22 +1948,76 @@ $("printBtn").addEventListener("click", () => {
    TAMPILKAN SEMUA
    ============================================================ */
 document.querySelectorAll(".needs-api").forEach((el) => el.classList.toggle("api-off", !hasApi()));
+if (!hasApi()) { const o = $("quizSource").querySelector('option[value="teman"]'); if (o) o.remove(); }
+
+/* ---------- Beranda (daftar mata kuliah) & halaman materi ---------- */
+let tampilan = "beranda";
+const TEKS_AWAL = $("mkInfo").textContent;
+function persenProgres(id) {
+  const s = library.subjects[id]; if (!s) return 0;
+  const store = readStore("demuse-belajar-progress-" + id, {});
+  const keys = s.modul.flatMap((m) => TASKS.map(([key]) => `m${m.nomor}-${key}`));
+  return keys.length ? Math.round((keys.filter((k) => store[k]).length / keys.length) * 100) : 0;
+}
+function sisaHari(iso) {
+  const t = new Date(iso); if (!iso || isNaN(t)) return "";
+  const hari = Math.ceil((t - new Date()) / 864e5);
+  return hari > 0 ? `⏳ ${hari} hari lagi ujian` : hari === 0 ? "🎓 Ujian hari ini!" : "";
+}
+function renderBeranda() {
+  renderBersama();
+  const ids = Object.keys(library.subjects);
+  $("courseList").classList.toggle("hidden", !ids.length);
+  $("caraPakai").classList.toggle("hidden", ids.length > 0);
+  $("caraPakaiLink").classList.toggle("hidden", !ids.length);
+  $("tryExample").classList.toggle("hidden", ids.length > 0);
+  $("courseCards").innerHTML = ids.map((id) => {
+    const s = library.subjects[id], p = persenProgres(id), hari = sisaHari(s.tanggalUjian);
+    return `<button type="button" class="course-card" data-buka="${esc(id)}">
+      <span class="cc-name">📘 ${esc(s.mataKuliah)}</span>
+      <span class="cc-meta">${[s.kode, s.modul.length + " modul"].filter(Boolean).map(esc).join(" · ")}${hari ? ` · <b>${hari}</b>` : ""}</span>
+      <span class="cc-bar"><i style="width:${p}%"></i></span>
+      <span class="cc-prog">Progres ${p}% <span class="cc-go">Buka →</span></span>
+    </button>`;
+  }).join("");
+}
+function tampilkanBeranda(pakaiRiwayat = true) {
+  if (pakaiRiwayat && tampilan === "materi" && adaRiwayat() && history.state && history.state.view === "materi") { history.back(); return; }
+  tampilan = "beranda";
+  renderAll();
+  window.scrollTo(0, 0);
+}
+function bukaMateri(id, pakaiRiwayat = true) {
+  if (!library.subjects[id]) return;
+  const dariBeranda = tampilan !== "materi";
+  library.active = id; saveLibrary();
+  tampilan = "materi";
+  if (pakaiRiwayat && dariBeranda && adaRiwayat()) history.pushState({ view: "materi" }, "");
+  renderAll();
+  window.scrollTo(0, 0);
+}
+$("courseCards").addEventListener("click", (e) => { const c = e.target.closest("[data-buka]"); if (c) bukaMateri(c.dataset.buka); });
+$("backHome").addEventListener("click", () => tampilkanBeranda());
+$("caraPakaiLink").addEventListener("click", () => { $("caraPakai").classList.toggle("hidden"); });
 
 function renderAll() {
   if (library.active && !library.subjects[library.active]) library.active = null;
   if (!library.active) library.active = Object.keys(library.subjects)[0] || null;
-  const d = current();
+  if (!current()) tampilan = "beranda";
+  const d = tampilan === "materi" ? current() : null;
   const has = !!d;
   $("welcome").classList.toggle("hidden", has);
   $("app").classList.toggle("hidden", !has);
   $("subjectBar").classList.toggle("hidden", !has);
   $("progressWrap").classList.toggle("hidden", !has);
+  $("backHome").classList.toggle("hidden", !has);
 
   if (!has) {
     document.title = "Template Belajar Ujian – deMuse";
     $("mkTitle").textContent = "Belajar Ujian Jadi Lebih Ringan";
-    $("mkInfo").textContent = "Masukkan materi mata kuliah ya warga, nanti akan langsung jadi ringkasan, kartu hafalan, dan latihan soal.";
-    tickCountdown();
+    $("mkInfo").textContent = TEKS_AWAL;
+    $("countdown").innerHTML = "";
+    renderBeranda();
     return;
   }
 
@@ -1282,7 +2044,10 @@ function renderAll() {
   loadTemanSoal();
 }
 
+if (adaRiwayat()) history.replaceState({ view: "beranda" }, "");
+libItems = readStore(BERSAMA_CACHE, []) || [];
 renderAll();
+muatBersama();
 
 /* ============================================================
    APLIKASI (PWA): bisa dipasang & dibuka tanpa internet

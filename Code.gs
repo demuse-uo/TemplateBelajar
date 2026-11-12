@@ -31,7 +31,7 @@
 const TAMPIL_LANGSUNG = true;   // false = harus disetujui admin dulu
 const BATAS_LAPORAN = 3;        // disembunyikan otomatis setelah dilaporkan sekian kali
 const UKURAN_POTONGAN = 40000;  // batas isi satu sel Google Sheets ~50.000 huruf
-const MAKS_MATERI = 400000;     // batas ukuran satu materi yang dibagikan
+const MAKS_MATERI = 2000000;    // batas ukuran satu materi yang dibagikan (± 1.000 halaman)
 
 const KOLOM_MATERI = ["id", "waktu", "nama", "jurusan", "mataKuliah", "kode", "kunci", "daftarModul", "jumlahModul", "jumlahSoal", "status", "laporan", "data"];
 const KOLOM_SOAL = ["id", "waktu", "kunci", "mataKuliah", "nomorModul", "judulModul", "tipe", "tanya", "pilihan", "jawaban", "pembahasan", "nama", "status", "laporan"];

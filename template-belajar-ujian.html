@@ -32,6 +32,7 @@
 <header>
   <div class="wrap">
     <div class="top-line">
+      <button type="button" class="btn back-btn hidden" id="backHome">← Beranda</button>
       <span class="badge">TEMPLATE BELAJAR UJIAN · deMuse</span>
       <button type="button" class="btn install-btn hidden" id="installBtn">📲 Pasang aplikasi</button>
     </div>
@@ -57,27 +58,50 @@
   </div>
 </header>
 
-<!-- ===== TAMPILAN AWAL (belum ada materi) ===== -->
+<!-- ===== BERANDA ===== -->
 <main class="wrap welcome" id="welcome">
+  <section id="courseList" class="hidden">
+    <h2>Mata kuliah kalian 📚</h2>
+    <p>Tekan salah satu untuk mulai belajar.</p>
+    <div class="course-grid" id="courseCards"></div>
+  </section>
+
+  <div id="caraPakai">
   <h2>Cara pakai, cuma 3 langkah 🌸</h2>
   <p>Bisa dipakai untuk mata kuliah apa saja.</p>
   <div class="steps">
     <div class="step"><b>1</b><h3>Tekan "Masukkan Materi"</h3><p>Ada di tombol merah muda di bawah ini.</p></div>
     <div class="step"><b>2</b><h3>Isi materinya</h3><p>Ketik di formulir yang tersedia, atau tempel catatan kalian yang sudah tersusun.</p></div>
-    <div class="step"><b>3</b><h3>Simpan, lalu belajar</h3><p>Materi warga langsung jadi ringkasan, kartu hafalan, dan latihan soal.</p></div>
+    <div class="step"><b>3</b><h3>Simpan, lalu belajar</h3><p>Materi warga tersimpan utuh, dan langsung ada kartu hafalan serta latihan soal.</p></div>
+  </div>
   </div>
   <div class="row center">
     <button class="btn pink" data-open-import>📥 Masukkan Materi</button>
-    <button class="btn needs-api" data-open-library>🤝 Pakai materi dari teman</button>
+    <button class="btn needs-api" data-open-library>🤝 Lihat materi dari teman</button>
     <button class="btn" id="tryExample">👀 Coba pakai contoh</button>
   </div>
+
+  <section id="bersamaSection" class="bersama needs-api">
+    <div class="sec-head">
+      <h2>🤝 Materi dari teman-teman</h2>
+      <button type="button" class="link-btn" id="bersamaRefresh">🔄 Muat ulang</button>
+    </div>
+    <p>Materi yang sudah dibagikan, dikelompokkan per jurusan. Tekan <b>Pakai materi ini</b> untuk ikut belajar.</p>
+    <div class="fc-controls b-filter">
+      <select id="bJurusan" aria-label="Pilih jurusan"></select>
+      <input type="search" class="search inline" id="bSearch" placeholder="🔍 Cari mata kuliah atau nama...">
+    </div>
+    <div id="bersamaList"></div>
+  </section>
+
+  <p class="center-link"><button type="button" class="link-btn hidden" id="caraPakaiLink">Lihat cara pakai</button></p>
 </main>
 
 <!-- ===== APLIKASI BELAJAR ===== -->
 <div id="app" class="hidden">
   <nav class="tabs">
     <div class="wrap tab-list">
-      <button class="tab-btn active" data-tab="ringkasan">📚 Ringkasan</button>
+      <button class="tab-btn active" data-tab="ringkasan">📚 Materi</button>
       <button class="tab-btn" data-tab="flashcard">🃏 Kartu Hafalan</button>
       <button class="tab-btn" data-tab="kuis">✍️ Latihan Soal</button>
       <button class="tab-btn" data-tab="esai">📝 Latihan Esai</button>
@@ -88,7 +112,7 @@
   <main class="wrap">
     <section class="panel active" id="ringkasan">
       <div class="note" id="catatanUmum"></div>
-      <input type="search" class="search" id="searchInput" placeholder="🔍 Cari materi atau istilah...">
+      <input type="search" class="search" id="searchInput" placeholder="🔍 Cari di materi...">
       <div id="modulList"></div>
     </section>
 
@@ -113,9 +137,10 @@
     <section class="panel" id="kuis">
       <div class="fc-controls">
         <select id="quizFilter" aria-label="Pilih modul"></select>
-        <select id="quizSource" aria-label="Pilih sumber soal" class="needs-api">
+        <select id="quizSource" aria-label="Pilih sumber soal">
           <option value="all">Semua soal</option>
-          <option value="ai">Soal utama</option>
+          <option value="ai">Soal dari materi</option>
+          <option value="auto">Soal otomatis</option>
           <option value="teman">Soal dari teman</option>
         </select>
         <button class="btn" id="quizShuffle">🔀 Acak soal</button>
@@ -139,7 +164,7 @@
     <section class="panel" id="checklist">
       <div class="card" id="checkList"></div>
       <div class="row">
-        <button class="btn" id="printBtn">🖨️ Cetak ringkasan</button>
+        <button class="btn" id="printBtn">🖨️ Cetak materi</button>
         <button class="btn" id="resetProgress">Hapus semua centang</button>
       </div>
     </section>
@@ -158,6 +183,7 @@
       <button type="button" class="mode-btn" data-mode="tempel">📋 Tempel catatan</button>
       <button type="button" class="mode-btn" data-mode="file">📂 Dari file</button>
     </div>
+    <div class="draft-note hidden" id="draftNote">📝 Isian terakhir kalian dipulihkan, jadi tinggal dilanjutkan. <button type="button" class="link-btn" id="draftClear">Mulai dari kosong</button></div>
 
     <!-- CARA 1: ISI FORMULIR -->
     <div id="modeForm">
@@ -184,13 +210,14 @@
             <input type="number" id="fNomor" min="1" max="99" inputmode="numeric">
           </label>
           <label class="field">Judul modul
-            <input type="text" id="fJudul" maxlength="200" placeholder="Contoh: Konsep Dasar Ekonomi">
+            <textarea id="fJudul" rows="1" maxlength="600" placeholder="Contoh: Konsep Dasar Ekonomi"></textarea>
+            <small><b></b>sub-judul (maks. 3).</small>
           </label>
         </div>
-        <label class="field">Ringkasan
-          <textarea id="fRingkasan" placeholder="Tulis inti materinya dengan kata-kata kalian sendiri..."></textarea>
+        <label class="field">Isi materi <small>Ketik atau tempel sebanyak apa pun. Semua tersimpan persis seperti yang kalian tulis.</small>
+          <textarea id="fRingkasan" placeholder="Tulis atau tempel materinya di sini..."></textarea>
         </label>
-        <label class="field">Poin penting <small>Tulis poin penting dari materi.</small>
+        <label class="field">Poin penting <small>Satu poin per baris. Pakai tombol Judul untuk mengelompokkan poin.</small>
           <textarea id="fPoin" placeholder="Masalah pokok ekonomi adalah kelangkaan&#10;Setiap pilihan punya biaya peluang"></textarea>
         </label>
       </fieldset>
@@ -213,25 +240,18 @@
         <button type="button" class="btn" id="addEsai">➕ Tambah soal esai</button>
       </fieldset>
 
-      <p class="tip">💡 Tidak harus diisi semua. Yang wajib hanya nama mata kuliah dan judul modul. Modul berikutnya bisa ditambahkan nanti lewat tombol "Tambah materi".</p>
+      <p class="tip">💾 Semua yang kalian ketik <b>tersimpan otomatis</b>. Kalau jendela ini tertutup atau HP mati, isiannya tetap ada saat dibuka lagi.<br>💡 Tidak harus diisi semua. Yang wajib hanya nama mata kuliah dan judul modul. Kalau soal tidak diisi, soal latihan dibuat <b>otomatis</b> dari materinya. Modul berikutnya bisa ditambahkan nanti lewat tombol "Tambah materi".</p>
     </div>
 
     <!-- CARA 2: TEMPEL CATATAN -->
     <div id="modeTempel" class="hidden">
-      <p style="margin-top:14px">Sudah punya catatan yang tersusun? Tempel di kotak ini. Tulis judul seperti <b>MODUL 1:</b>, <b>RINGKASAN:</b>, <b>SOAL:</b>, dan <b>JAWABAN:</b> persis seperti contoh.</p>
-      <textarea id="pasteInput" placeholder="Tempel catatan kalian di sini..." style="min-height:180px;margin-top:10px"></textarea>
-
-      <details class="modal-step other-way">
-        <summary>Lihat contoh susunannya</summary>
-        <pre class="contoh-susunan" id="contohSusunan"></pre>
-        <button type="button" class="btn" id="copyContoh">📋 Salin contoh ini</button>
-      </details>
+      <textarea id="pasteInput" placeholder="MATA KULIAH: ...&#10;MODUL 1: ...&#10;&#10;Tempel materi kalian di sini..." style="min-height:220px;margin-top:10px"></textarea>
 
     </div>
 
     <!-- CARA 3: DARI FILE -->
     <div id="modeFile" class="hidden">
-      <p style="margin-top:14px">Pilih file materi kalian. Isinya langsung diambil dan disimpan sebagai ringkasan dan poin penting.</p>
+      <p style="margin-top:14px">Pilih file materi kalian. Semua tulisannya diambil dan disimpan utuh.</p>
       <label class="dropzone" id="dropzone">
         <span class="dz-icon" aria-hidden="true">📂</span>
         <strong>Pilih file materi</strong>
@@ -239,11 +259,12 @@
         <span class="btn primary dz-btn">Cari file</span>
         <input type="file" id="fileInput" accept=".pdf,.pptx,.docx,.txt,.json,.ppt,.doc,application/pdf,text/plain" hidden>
       </label>
-      <p class="tip">💡 Dari PDF/PowerPoint yang terisi hanya ringkasan dan poin penting. Soal latihan bisa ditambahkan nanti lewat <b>Isi formulir</b>. PDF hasil scan/foto tidak bisa dibaca.</p>
+      <p class="tip">💡 Isi file tersimpan utuh. Kartu hafalan dan soal latihan dibuat <b>otomatis</b> dari isinya. PDF hasil scan/foto tidak bisa dibaca.</p>
     </div>
 
     <div class="msg hidden" id="importMsg"></div>
     <div class="modal-actions">
+      <span class="autosave" id="autosaveMateri" aria-live="polite"></span>
       <button type="button" class="btn" data-close="importModal">Batal</button>
       <button type="button" class="btn pink" id="saveImport">💾 Simpan materi</button>
     </div>
@@ -316,6 +337,7 @@
   <div class="modal-box">
     <h2 id="soalTitle">➕ Buat soal untuk teman</h2>
     <p class="muted">Soal kalian ditambahkan untuk teman-teman. Soal yang sudah ada tidak akan berubah.</p>
+    <div class="draft-note hidden" id="soalDraftNote">📝 Isian soal terakhir kalian dipulihkan. <button type="button" class="link-btn" id="soalDraftClear">Mulai dari kosong</button></div>
 
     <label class="field">Untuk modul
       <select id="soalModul"></select>
@@ -351,6 +373,7 @@
 
     <div class="msg hidden" id="soalMsg"></div>
     <div class="modal-actions">
+      <span class="autosave" id="autosaveSoal" aria-live="polite"></span>
       <button class="btn" data-close="soalModal">Batal</button>
       <button class="btn pink" id="soalSend">📤 Kirim soal</button>
     </div>
