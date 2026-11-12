@@ -72,7 +72,7 @@
   <div class="steps">
     <div class="step"><b>1</b><h3>Tekan "Masukkan Materi"</h3><p>Ada di tombol merah muda di bawah ini.</p></div>
     <div class="step"><b>2</b><h3>Isi materinya</h3><p>Ketik di formulir yang tersedia, atau tempel catatan kalian yang sudah tersusun.</p></div>
-    <div class="step"><b>3</b><h3>Simpan, lalu belajar</h3><p>Materi warga tersimpan utuh, dan langsung ada kartu hafalan serta latihan soal.</p></div>
+    <div class="step"><b>3</b><h3>Simpan, lalu belajar</h3><p>Materi warga tersimpan utuh dan siap dipelajari.</p></div>
   </div>
   </div>
   <div class="row center">
@@ -140,7 +140,6 @@
         <select id="quizSource" aria-label="Pilih sumber soal">
           <option value="all">Semua soal</option>
           <option value="ai">Soal dari materi</option>
-          <option value="auto">Soal otomatis</option>
           <option value="teman">Soal dari teman</option>
         </select>
         <button class="btn" id="quizShuffle">🔀 Acak soal</button>
@@ -240,7 +239,7 @@
         <button type="button" class="btn" id="addEsai">➕ Tambah soal esai</button>
       </fieldset>
 
-      <p class="tip">💾 Semua yang kalian ketik <b>tersimpan otomatis</b>. Kalau jendela ini tertutup atau HP mati, isiannya tetap ada saat dibuka lagi.<br>💡 Tidak harus diisi semua. Yang wajib hanya nama mata kuliah dan judul modul. Kalau soal tidak diisi, soal latihan dibuat <b>otomatis</b> dari materinya. Modul berikutnya bisa ditambahkan nanti lewat tombol "Tambah materi".</p>
+      <p class="tip">💾 Semua yang kalian ketik <b>tersimpan otomatis</b>. Kalau jendela ini tertutup atau HP mati, isiannya tetap ada saat dibuka lagi.<br>💡 Tidak harus diisi semua. Yang wajib hanya nama mata kuliah dan judul modul. Modul berikutnya bisa ditambahkan nanti lewat tombol "Tambah materi".</p>
     </div>
 
     <!-- CARA 2: TEMPEL CATATAN -->
@@ -259,7 +258,7 @@
         <span class="btn primary dz-btn">Cari file</span>
         <input type="file" id="fileInput" accept=".pdf,.pptx,.docx,.txt,.json,.ppt,.doc,application/pdf,text/plain" hidden>
       </label>
-      <p class="tip">💡 Isi file tersimpan utuh. Kartu hafalan dan soal latihan dibuat <b>otomatis</b> dari isinya. PDF hasil scan/foto tidak bisa dibaca.</p>
+      <p class="tip">💡 Isi file tersimpan utuh. Soal latihan bisa ditambahkan nanti lewat <b>Isi formulir</b>. PDF hasil scan/foto tidak bisa dibaca.</p>
     </div>
 
     <div class="msg hidden" id="importMsg"></div>

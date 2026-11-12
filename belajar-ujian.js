@@ -1298,163 +1298,12 @@ $("searchInput").addEventListener("input", (e) => renderRingkasan(e.target.value
 const inFilter = (f, nomor) => f === "all" || String(nomor) === String(f);
 
 /* ============================================================
-   SOAL & KARTU HAFALAN OTOMATIS (tanpa AI, pakai aturan)
-   - Pengertian: kalimat "X adalah/merupakan/yaitu Y" dan baris "X: Y"
-   - Soal pengertian: "Apa yang dimaksud dengan X?" (pilihan = pengertian lain)
-   - Soal lengkapi kalimat: satu kata penting dikosongkan
-   - Esai: dari istilah dan judul bagian
-   ============================================================ */
-const STOP = new Set(("yang dan di ke dari untuk dengan pada adalah merupakan dalam atau ini itu oleh sebagai juga karena akan dapat " +
-  "tidak ada lebih para serta secara bahwa setiap telah sudah harus bisa mereka kita kami yaitu ialah antara tersebut hal " +
-  "sangat maka agar saat suatu sebuah seperti namun tetapi jika bila hanya masih sendiri tentang terhadap melalui bagi kepada " +
-  "sehingga menjadi memiliki banyak beberapa semua dimana bagaimana mengapa kapan siapa begitu pula hingga sampai setelah " +
-  "sebelum sedang selalu sering kali pertama kedua ketiga lain lainnya berbagai biasanya disebut dilakukan melakukan " +
-  "the and of to in is are for with that this from which their there these those about").split(" "));
-const polos = (t) => String(t ?? "").replace(/^\s*#{1,3}\s*/, "").replace(/\*\*|__/g, "").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1$2").replace(/\s+/g, " ").trim();
-const huruf1 = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
-const singkat = (t, n = 190) => (t.length > n ? t.slice(0, n).replace(/\s+\S*$/, "") + "…" : t);
-function acakBenih(teks) {          // angka acak yang selalu sama untuk teks yang sama
-  let h = 1779033703 ^ teks.length;
-  for (let i = 0; i < teks.length; i++) { h = Math.imul(h ^ teks.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
-  return () => { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
-}
-const acakDengan = (arr, r) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-
-function kalimatModul(m) {
-  const sumber = [...String(m.ringkasan || "").split("\n"), ...m.poin].filter((t) => !/^\s*#/.test(t)).map(polos).filter(Boolean);
-  return sumber.flatMap((t) => t.split(/(?<=[.!?])\s+(?=[A-Z0-9"“(])/)).map((k) => k.trim()).filter((k) => k.length >= 35 && k.length <= 260 && k.split(/\s+/).length >= 7 && !/:$/.test(k));
-}
-const otoCache = new Map();
-function istilahOtomatis(m) {
-  const key = "i|" + m.judul + "|" + m.ringkasan + "|" + m.poin.join("|");
-  if (otoCache.has(key)) return otoCache.get(key);
-  const out = [], seen = new Set(m.istilah.map((t) => polos(t.kata).toLowerCase()));
-  const add = (k, a) => {
-    k = polos(k).replace(/^(yang dimaksud dengan|pengertian( dari)?|definisi( dari)?|arti( dari)?)\s+/i, "").replace(/[:,;.]+$/, "").trim();
-    a = polos(a).replace(/^[:\-–\s]+/, "").trim();
-    const low = k.toLowerCase();
-    if (k.length < 3 || k.split(/\s+/).length > 6 || a.length < 12 || seen.has(low) || /^(ini|itu|hal|dia|mereka|hal ini|tujuannya)$/i.test(k)) return;
-    seen.add(low);
-    out.push({ kata: huruf1(k), arti: huruf1(a), otomatis: true });
-  };
-  kalimatModul(m).forEach((k) => {
-    const x = k.match(/^(.{3,70}?)\s+(?:adalah|merupakan|ialah|yaitu|didefinisikan sebagai|diartikan sebagai)\s+(.{12,})$/i);
-    if (x && !/[,;]/.test(x[1])) add(x[1], x[2]);
-  });
-  [...String(m.ringkasan || "").split("\n"), ...m.poin].forEach((p) => {
-    if (/^\s*#/.test(p)) return;
-    const x = polos(p).replace(/^([-•–]|\d+[.)])\s+/, "").match(/^([^:]{3,50}):\s+(.{12,300})$/);
-    if (x) add(x[1], x[2]);
-  });
-  const hasil = out.slice(0, 15);
-  otoCache.set(key, hasil);
-  return hasil;
-}
-const semuaIstilah = (m) => [...m.istilah, ...istilahOtomatis(m)];
-
-function konteksKuis(d) {
-  const istilah = d.modul.flatMap(semuaIstilah).map((t) => ({ kata: polos(t.kata), arti: polos(t.arti) }));
-  const kata = new Map();
-  const istilahKata = new Set(istilah.map((t) => t.kata.toLowerCase()));
-  d.modul.forEach((m) => kalimatModul(m).forEach((k) => (k.match(/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9-]*|\d[\d.,%]*/g) || []).forEach((w, i) => {
-    const low = w.toLowerCase();
-    if (i === 0 && !istilahKata.has(low)) return;          // kata awal kalimat (Berikut, Keputusan...) bukan pilihan yang baik
-    if (!STOP.has(low) && (w.length >= 5 || /\d/.test(w))) kata.set(low, w);
-  })));
-  return { istilah, kata: [...kata.values()], istilahKata };
-}
-
-function kataKunci(k, penting) {
-  const words = k.match(/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9-]*|\d[\d.,%]*/g) || [];
-  let best = null, skor = -1;
-  words.forEach((w, i) => {
-    const low = w.toLowerCase();
-    if (STOP.has(low) || (w.length < 5 && !/\d/.test(w))) return;
-    let sc = Math.min(w.length, 12);
-    if (penting.has(low)) sc += 8;
-    if (i > 0 && /^[A-Z]/.test(w)) sc += 4;
-    if (/\d/.test(w)) sc += 3;
-    if (i === 0) sc -= 3;
-    if (sc > skor) { skor = sc; best = w; }
-  });
-  return best;
-}
-const reKata = (w) => new RegExp(`(^|[^A-Za-zÀ-ÿ0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-zÀ-ÿ0-9])`);
-
-function soalOtomatis(m, ctx) {
-  const key = "s|" + m.nomor + "|" + m.judul + "|" + m.ringkasan + "|" + m.poin.join("|") + "|" + ctx.istilah.length + "|" + ctx.kata.length;
-  if (otoCache.has(key)) return otoCache.get(key);
-  const r = acakBenih(key);
-  const hasil = [], sudah = new Set(m.soal.map((s) => polos(s.tanya).toLowerCase()));
-  const pilihanJadi = (benar, salah) => {
-    const opsi = acakDengan([benar, ...salah.slice(0, 3)], r);
-    return { pilihan: opsi, jawaban: opsi.indexOf(benar) };
-  };
-  // 1) soal pengertian
-  const milik = semuaIstilah(m).map((t) => ({ kata: polos(t.kata), arti: polos(t.arti) }));
-  milik.slice(0, 5).forEach((t, i) => {
-    const lainArti = acakDengan(ctx.istilah.filter((x) => x.kata.toLowerCase() !== t.kata.toLowerCase() && x.arti !== t.arti).map((x) => singkat(x.arti)), r);
-    const lainKata = acakDengan(ctx.istilah.filter((x) => x.kata.toLowerCase() !== t.kata.toLowerCase()).map((x) => x.kata), r);
-    if (i % 2 === 0 && lainArti.length >= 3) {
-      const tanya = `Apa yang dimaksud dengan **${t.kata}**?`;
-      if (!sudah.has(polos(tanya).toLowerCase())) hasil.push({ tanya, ...pilihanJadi(singkat(t.arti), [...new Set(lainArti)]), pembahasan: `${t.kata} adalah ${t.arti.replace(/^[A-Z]/, (c) => c.toLowerCase())}` });
-    } else if (lainKata.length >= 3) {
-      hasil.push({ tanya: `Istilah yang tepat untuk pengertian berikut adalah...\n"${singkat(t.arti, 220)}"`, ...pilihanJadi(t.kata, [...new Set(lainKata)]), pembahasan: `Pengertian tersebut adalah pengertian dari **${t.kata}**.` });
-    }
-  });
-  // 2) soal lengkapi kalimat
-  const penting = new Set(milik.flatMap((t) => t.kata.toLowerCase().split(/\s+/)));
-  const pakai = new Set();
-  acakDengan(kalimatModul(m), r).forEach((k) => {
-    if (hasil.length >= 8) return;
-    const w = kataKunci(k, penting);
-    if (!w || pakai.has(w.toLowerCase())) return;
-    const angka = /\d/.test(w), besar = /^[A-Z]/.test(w);
-    const isiKalimat = new Set((k.match(/[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9-]*/g) || []).map((x) => x.toLowerCase()));
-    const kelas = (x) => (/^(me|ber|di|ter|ke)[a-z]{3,}/i.test(x) && !ctx.istilahKata.has(x.toLowerCase()) ? "kerja" : "benda");
-    const cocok = (x) => x.toLowerCase() !== w.toLowerCase() && !isiKalimat.has(x.toLowerCase()) && /\d/.test(x) === angka && (angka || /^[A-Z]/.test(x) === besar);
-    let calon = ctx.istilahKata.has(w.toLowerCase())
-      ? ctx.istilah.map((t) => (besar ? t.kata : t.kata.toLowerCase())).filter((x) => !/\s/.test(x) && x.toLowerCase() !== w.toLowerCase() && !isiKalimat.has(x.toLowerCase()))
-      : [];
-    if (calon.length < 3) {
-      const semua = ctx.kata.filter(cocok);
-      const sejenis = semua.filter((x) => kelas(x) === kelas(w));
-      calon = [...new Set([...calon, ...(sejenis.length >= 3 ? sejenis : semua)])];
-    }
-    const salah = acakDengan(calon, r).sort((a, b) => Math.abs(a.length - w.length) - Math.abs(b.length - w.length)).slice(0, 6);
-    const tiga = acakDengan(salah, r).slice(0, 3);
-    if (tiga.length < 3) return;
-    pakai.add(w.toLowerCase());
-    const kosong = k.replace(reKata(w), "$1_______");
-    const lengkap = k.replace(reKata(w), "$1**" + w + "**");
-    hasil.push({ tanya: `Lengkapi kalimat berikut:\n"${kosong}"`, ...pilihanJadi(w, tiga), pembahasan: `Kalimat lengkapnya: "${lengkap}"` });
-  });
-  otoCache.set(key, hasil);
-  return hasil;
-}
-
-function esaiOtomatis(m) {
-  const out = [];
-  semuaIstilah(m).slice(0, 2).forEach((t) => out.push({ tanya: `Jelaskan apa yang dimaksud dengan **${polos(t.kata)}**!`, jawaban: polos(t.arti) }));
-  // dari judul bagian (##) di poin penting
-  let judul = null, isi = [];
-  const tutup = () => { if (judul && isi.length && out.length < 4) out.push({ tanya: `Jelaskan tentang **${judul}**!`, jawaban: singkat(isi.join(" "), 900) }); judul = null; isi = []; };
-  [...String(m.ringkasan || "").split("\n"), ...m.poin].forEach((p) => { if (!p.trim()) return; if (/^\s*#{1,3}\s/.test(p)) { tutup(); judul = polos(p); } else if (judul) isi.push(polos(p)); });
-  tutup();
-  if (!out.length && (m.ringkasan || m.poin.length)) {
-    out.push({ tanya: `Jelaskan isi materi **${m.judul}** dengan kata-kata kalian sendiri!`, jawaban: singkat(polos(m.ringkasan || m.poin.join(" ")), 900) });
-  }
-  const sudah = new Set(m.esai.map((s) => polos(s.tanya).toLowerCase()));
-  return out.filter((s) => !sudah.has(polos(s.tanya).toLowerCase())).slice(0, 3);
-}
-
-/* ============================================================
    KARTU HAFALAN
    ============================================================ */
 let cards = [], fcIndex = 0;
 function buildCards() {
   const f = $("fcFilter").value;
-  cards = current().modul.flatMap((m) => (inFilter(f, m.nomor) ? semuaIstilah(m) : []));
+  cards = current().modul.flatMap((m) => (inFilter(f, m.nomor) ? m.istilah : []));
   fcIndex = 0; showCard();
 }
 function showCard() {
@@ -1498,7 +1347,7 @@ async function loadTemanSoal() {
     const fresh = cleanTeman(res.data);
     const old = readStore(temanKey(key), []);
     writeStore(temanKey(key), fresh);
-    if (current() && courseKey(current()) === key && JSON.stringify(fresh) !== JSON.stringify(old)) { buildQuiz(); renderEsai(); }
+    if (current() && courseKey(current()) === key && JSON.stringify(fresh) !== JSON.stringify(old)) { buildQuiz(); renderEsai(); aturTab(); }
   } catch (e) { /* tetap pakai soal teman yang tersimpan */ }
 }
 
@@ -1520,11 +1369,9 @@ function buildQuiz(random = false) {
   const src = $("quizSource").value || "all";
   const d = current();
   const ai = src === "all" || src === "ai" ? d.modul.flatMap((m) => (inFilter(f, m.nomor) ? m.soal.map((s) => ({ ...s, modul: m.nomor })) : [])) : [];
-  const ctx = src === "all" || src === "auto" ? konteksKuis(d) : null;
-  const auto = ctx ? d.modul.flatMap((m) => (inFilter(f, m.nomor) ? soalOtomatis(m, ctx).map((s) => ({ ...s, modul: m.nomor, auto: true })) : [])) : [];
   const teman = !(src === "all" || src === "teman") ? [] : temanSoal().filter((s) => s.tipe === "pg" && inFilter(f, s.nomorModul))
     .map((s) => ({ tanya: s.tanya, pilihan: s.pilihan, jawaban: s.jawaban, pembahasan: s.pembahasan, modul: s.nomorModul, dari: s.nama, id: s.id }));
-  quiz = [...ai, ...auto, ...teman];
+  quiz = [...ai, ...teman];
   if (random) quiz = shuffle(quiz);
   answered = 0; correct = 0; renderQuiz();
 }
@@ -1532,7 +1379,7 @@ function renderQuiz() {
   if (!quiz.length) {
     const src = $("quizSource").value;
     $("quizList").innerHTML = `<div class="card empty">${src === "teman" ? "Belum ada soal dari teman untuk pilihan ini. Yuk jadi yang pertama membuat soal! ✍️" :
-      src === "auto" ? "Materinya masih terlalu sedikit untuk dibuatkan soal otomatis. Tambahkan ringkasan atau poin penting yang lebih lengkap." : "Belum ada soal pilihan ganda."}</div>`;
+      "Belum ada soal pilihan ganda untuk materi ini.<br>Soal bisa ditambahkan lewat <b>➕ Tambah materi</b> (bagian Soal pilihan ganda)" + (hasApi() ? " atau tombol <b>➕ Buat soal untuk teman</b>." : ".")}</div>`;
     updateScore(); return;
   }
   $("quizList").innerHTML = quiz.map((q, qi) => `
@@ -1573,9 +1420,8 @@ $("quizReset").addEventListener("click", () => buildQuiz());
    ============================================================ */
 function renderEsai() {
   const ai = current().modul.flatMap((m) => m.esai.map((s) => ({ ...s, modul: m.nomor })));
-  const auto = current().modul.flatMap((m) => esaiOtomatis(m).map((s) => ({ ...s, modul: m.nomor, auto: true })));
   const teman = temanSoal().filter((s) => s.tipe === "esai").map((s) => ({ tanya: s.tanya, jawaban: s.jawaban, modul: s.nomorModul, dari: s.nama, id: s.id }));
-  const items = [...ai, ...auto, ...teman].sort((a, b) => a.modul - b.modul);
+  const items = [...ai, ...teman].sort((a, b) => a.modul - b.modul);
   if (!items.length) { $("esaiList").innerHTML = `<div class="card empty">Belum ada soal esai.</div>`; return; }
   $("esaiList").innerHTML = items.map((s, i) => `
     <div class="card q-card">
@@ -2000,6 +1846,24 @@ $("courseCards").addEventListener("click", (e) => { const c = e.target.closest("
 $("backHome").addEventListener("click", () => tampilkanBeranda());
 $("caraPakaiLink").addEventListener("click", () => { $("caraPakai").classList.toggle("hidden"); });
 
+/* Tab yang kosong disembunyikan (Kartu Hafalan hanya muncul kalau ada istilah yang diisi sendiri).
+   Latihan Soal & Esai tetap ada kalau fitur berbagi aktif, supaya teman bisa menambah soal. */
+function aturTab() {
+  const d = current(); if (!d) return;
+  const teman = temanSoal();
+  const tampil = {
+    flashcard: d.modul.some((m) => m.istilah.length),
+    kuis: d.modul.some((m) => m.soal.length) || teman.some((x) => x.tipe === "pg") || hasApi(),
+    esai: d.modul.some((m) => m.esai.length) || teman.some((x) => x.tipe === "esai") || hasApi()
+  };
+  Object.entries(tampil).forEach(([tab, on]) => {
+    const b = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+    if (b) b.classList.toggle("hidden", !on);
+  });
+  const aktif = document.querySelector(".tab-btn.active");
+  if (aktif && aktif.classList.contains("hidden")) document.querySelector('.tab-btn[data-tab="ringkasan"]').click();
+}
+
 function renderAll() {
   if (library.active && !library.subjects[library.active]) library.active = null;
   if (!library.active) library.active = Object.keys(library.subjects)[0] || null;
@@ -2041,6 +1905,7 @@ function renderAll() {
   buildQuiz();
   renderEsai();
   renderChecklist();
+  aturTab();
   loadTemanSoal();
 }
 
