@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Template Belajar Ujian – deMuse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!--
+  TEMPLATE BELAJAR UJIAN — deMuse
+  File: template-belajar-ujian.html + belajar-ujian.css + belajar-ujian.js
+  (+ Code.gs untuk Google Sheets, dipasang oleh admin)
+  Pengguna tidak perlu edit kode.
+-->
+
+<link rel="stylesheet" href="belajar-ujian.css">
+
+<!-- Supaya bisa dipasang sebagai aplikasi (PWA) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22304f">
+<link rel="icon" type="image/png" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Belajar Ujian">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="top-line">
+      <span class="badge">TEMPLATE BELAJAR UJIAN · deMuse</span>
+      <button type="button" class="btn install-btn hidden" id="installBtn">📲 Pasang aplikasi</button>
+    </div>
+    <h1 id="mkTitle">Belajar Ujian Jadi Lebih Ringan</h1>
+    <p id="mkInfo">Masukkan materi mata kuliahmu, langsung jadi ringkasan, kartu hafalan, dan latihan soal.</p>
+
+    <div class="subject-bar hidden" id="subjectBar">
+      <select id="subjectSelect" aria-label="Pilih mata kuliah"></select>
+      <div class="row">
+        <button class="btn pink" data-open-import>➕ Tambah materi</button>
+        <button class="btn needs-api" data-open-library>🤝 Materi Bersama</button>
+        <button class="btn needs-api" id="shareBtn">📤 Bagikan</button>
+        <button class="btn" id="downloadBtn" title="Simpan materi jadi file, bisa dikirim ke teman">💾 Simpan ke file</button>
+        <button class="btn" id="deleteBtn" title="Hapus mata kuliah ini" aria-label="Hapus mata kuliah ini">🗑️</button>
+      </div>
+    </div>
+
+    <div class="countdown" id="countdown"></div>
+    <div class="progress-top hidden" id="progressWrap">
+      <span id="progressText">Progres belajar: 0%</span>
+      <div class="bar"><i id="progressBar"></i></div>
+    </div>
+  </div>
+</header>
+
+<!-- ===== TAMPILAN AWAL (belum ada materi) ===== -->
+<main class="wrap welcome" id="welcome">
+  <h2>Cara pakai, cuma 3 langkah 🌸</h2>
+  <p>Bisa dipakai untuk mata kuliah apa saja.</p>
+  <div class="steps">
+    <div class="step"><b>1</b><h3>Tekan "Masukkan Materi"</h3><p>Ada di tombol merah muda di bawah ini.</p></div>
+    <div class="step"><b>2</b><h3>Isi materinya</h3><p>Ketik di formulir yang tersedia, atau tempel catatanmu yang sudah tersusun.</p></div>
+    <div class="step"><b>3</b><h3>Simpan, lalu belajar</h3><p>Materimu langsung jadi ringkasan, kartu hafalan, dan latihan soal.</p></div>
+  </div>
+  <div class="row center">
+    <button class="btn pink" data-open-import>📥 Masukkan Materi</button>
+    <button class="btn needs-api" data-open-library>🤝 Pakai materi dari teman</button>
+    <button class="btn" id="tryExample">👀 Coba pakai contoh</button>
+  </div>
+</main>
+
+<!-- ===== APLIKASI BELAJAR ===== -->
+<div id="app" class="hidden">
+  <nav class="tabs">
+    <div class="wrap tab-list">
+      <button class="tab-btn active" data-tab="ringkasan">📚 Ringkasan</button>
+      <button class="tab-btn" data-tab="flashcard">🃏 Kartu Hafalan</button>
+      <button class="tab-btn" data-tab="kuis">✍️ Latihan Soal</button>
+      <button class="tab-btn" data-tab="esai">📝 Latihan Esai</button>
+      <button class="tab-btn" data-tab="checklist">✅ Progres</button>
+    </div>
+  </nav>
+
+  <main class="wrap">
+    <section class="panel active" id="ringkasan">
+      <div class="note" id="catatanUmum"></div>
+      <input type="search" class="search" id="searchInput" placeholder="🔍 Cari materi atau istilah...">
+      <div id="modulList"></div>
+    </section>
+
+    <section class="panel" id="flashcard">
+      <div class="fc-controls">
+        <select id="fcFilter" aria-label="Pilih modul"></select>
+        <button class="btn" id="fcShuffle">🔀 Acak</button>
+      </div>
+      <div class="flashcard" id="fcCard">
+        <div class="fc-inner">
+          <div class="fc-face fc-front"><h2 id="fcFront"></h2><p class="fc-hint">Tekan kartu untuk lihat artinya</p></div>
+          <div class="fc-face fc-back"><p id="fcBack"></p></div>
+        </div>
+      </div>
+      <div class="fc-nav">
+        <button class="btn" id="fcPrev">← Sebelumnya</button>
+        <span id="fcCount">0 / 0</span>
+        <button class="btn primary" id="fcNext">Berikutnya →</button>
+      </div>
+    </section>
+
+    <section class="panel" id="kuis">
+      <div class="fc-controls">
+        <select id="quizFilter" aria-label="Pilih modul"></select>
+        <select id="quizSource" aria-label="Pilih sumber soal" class="needs-api">
+          <option value="all">Semua soal</option>
+          <option value="ai">Soal utama</option>
+          <option value="teman">Soal dari teman</option>
+        </select>
+        <button class="btn" id="quizShuffle">🔀 Acak soal</button>
+        <button class="btn pink needs-api" data-open-soal="pg">➕ Buat soal untuk teman</button>
+      </div>
+      <div id="quizList"></div>
+      <div class="score-box">
+        <span id="scoreText">Skor: 0 / 0</span>
+        <button class="btn pink" id="quizReset">Ulangi</button>
+      </div>
+    </section>
+
+    <section class="panel" id="esai">
+      <div class="note">Coba jawab dulu dengan kata-katamu sendiri, baru cek contoh jawabannya. Ini latihan paling ampuh buat ujian esai 💪</div>
+      <div class="fc-controls needs-api">
+        <button class="btn pink" data-open-soal="esai">➕ Buat soal esai untuk teman</button>
+      </div>
+      <div id="esaiList"></div>
+    </section>
+
+    <section class="panel" id="checklist">
+      <div class="card" id="checkList"></div>
+      <div class="row">
+        <button class="btn" id="printBtn">🖨️ Cetak ringkasan</button>
+        <button class="btn" id="resetProgress">Hapus semua centang</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer>Template belajar oleh deMuse · Materi tersimpan otomatis di HP/laptop kamu · Semangat ujiannya! 🌸</footer>
+
+<!-- ===== MODAL: MASUKKAN MATERI ===== -->
+<div class="modal hidden" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+  <div class="modal-box">
+    <h2 id="importTitle">📥 Masukkan Materi</h2>
+    <p class="muted">Pilih cara yang paling mudah untukmu.</p>
+    <div class="mode-tabs">
+      <button type="button" class="mode-btn active" data-mode="form">✏️ Isi formulir</button>
+      <button type="button" class="mode-btn" data-mode="tempel">📋 Tempel catatan</button>
+    </div>
+
+    <!-- CARA 1: ISI FORMULIR -->
+    <div id="modeForm">
+      <fieldset class="group">
+        <legend>Mata kuliah</legend>
+        <label class="field">Nama mata kuliah
+          <input type="text" id="fMk" list="fMkList" maxlength="150" placeholder="Contoh: Pengantar Ilmu Ekonomi">
+        </label>
+        <datalist id="fMkList"></datalist>
+        <div class="two">
+          <label class="field">Kode <small>(boleh kosong)</small>
+            <input type="text" id="fKode" maxlength="40" placeholder="Contoh: FSAB4102">
+          </label>
+          <label class="field">Tanggal ujian <small>(boleh kosong)</small>
+            <input type="date" id="fTgl">
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Modul</legend>
+        <div class="two">
+          <label class="field">Nomor modul
+            <input type="number" id="fNomor" min="1" max="99" inputmode="numeric">
+          </label>
+          <label class="field">Judul modul
+            <input type="text" id="fJudul" maxlength="200" placeholder="Contoh: Konsep Dasar Ekonomi">
+          </label>
+        </div>
+        <label class="field">Ringkasan
+          <textarea id="fRingkasan" placeholder="Tulis inti materinya dengan kata-katamu sendiri..."></textarea>
+        </label>
+        <label class="field">Poin penting <small>Tulis satu poin per baris.</small>
+          <textarea id="fPoin" placeholder="Masalah pokok ekonomi adalah kelangkaan&#10;Setiap pilihan punya biaya peluang"></textarea>
+        </label>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Istilah <small>(untuk kartu hafalan)</small></legend>
+        <div id="fIstilah"></div>
+        <button type="button" class="btn" id="addIstilah">➕ Tambah istilah</button>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Soal pilihan ganda</legend>
+        <div id="fSoal"></div>
+        <button type="button" class="btn" id="addSoal">➕ Tambah soal</button>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Soal esai</legend>
+        <div id="fEsai"></div>
+        <button type="button" class="btn" id="addEsai">➕ Tambah soal esai</button>
+      </fieldset>
+
+      <p class="tip">💡 Tidak harus diisi semua. Yang wajib hanya nama mata kuliah dan judul modul. Modul berikutnya bisa ditambahkan nanti lewat tombol "Tambah materi".</p>
+    </div>
+
+    <!-- CARA 2: TEMPEL CATATAN -->
+    <div id="modeTempel" class="hidden">
+      <p style="margin-top:14px">Sudah punya catatan yang tersusun? Tempel di kotak ini. Tulis judul seperti <b>MODUL 1:</b>, <b>RINGKASAN:</b>, <b>SOAL:</b>, dan <b>JAWABAN:</b> persis seperti contoh.</p>
+      <textarea id="pasteInput" placeholder="Tempel catatanmu di sini..." style="min-height:180px;margin-top:10px"></textarea>
+
+      <details class="modal-step other-way">
+        <summary>Lihat contoh susunannya</summary>
+        <pre class="contoh-susunan" id="contohSusunan"></pre>
+        <button type="button" class="btn" id="copyContoh">📋 Salin contoh ini</button>
+      </details>
+
+      <details class="modal-step other-way">
+        <summary>Punya file materi dari teman? Tekan di sini</summary>
+        <label class="dropzone" id="dropzone">
+          <strong>📂 Pilih file materi</strong>
+          <small>File .txt hasil "Simpan ke file", atau tarik file-nya ke kotak ini</small>
+          <input type="file" id="fileInput" accept=".txt,.json,text/plain,application/json" hidden>
+        </label>
+      </details>
+    </div>
+
+    <div class="msg hidden" id="importMsg"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn" data-close="importModal">Batal</button>
+      <button type="button" class="btn pink" id="saveImport">💾 Simpan materi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: SIMPAN KE MANA ===== -->
+<div class="modal hidden" id="destModal" role="dialog" aria-modal="true" aria-labelledby="destTitle">
+  <div class="modal-box small">
+    <h2 id="destTitle">Simpan materi ini ke mana?</h2>
+    <p class="summary" id="destSummary"></p>
+    <div id="destOptions" class="choice-list"></div>
+    <p class="tip">💡 Pilih "Tambahkan ke" kalau ini modul lanjutan dari mata kuliah yang sudah ada. Modul dengan nomor yang sama akan diperbarui.</p>
+    <div class="modal-actions">
+      <button class="btn" data-close="destModal">Batal</button>
+      <button class="btn pink" id="destSave">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: MATERI BERSAMA ===== -->
+<div class="modal hidden" id="libraryModal" role="dialog" aria-modal="true" aria-labelledby="libTitle">
+  <div class="modal-box">
+    <h2 id="libTitle">🤝 Materi Bersama</h2>
+    <p class="muted">Materi yang dibagikan teman-teman. Tekan <b>Pakai materi ini</b> untuk belajar dengan materi tersebut.</p>
+    <div class="fc-controls" style="margin-top:14px">
+      <select id="libJurusan" aria-label="Pilih jurusan"></select>
+      <input type="search" class="search inline" id="libSearch" placeholder="🔍 Cari mata kuliah...">
+    </div>
+    <div id="libList"></div>
+    <div class="modal-actions">
+      <button class="btn" id="libRefresh">🔄 Muat ulang</button>
+      <button class="btn" data-close="libraryModal">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: BAGIKAN MATERI ===== -->
+<div class="modal hidden" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+  <div class="modal-box">
+    <h2 id="shareTitle">📤 Bagikan ke teman-teman</h2>
+    <p class="muted" id="shareSubject"></p>
+
+    <label class="field">Nama kamu
+      <input type="text" id="shareNama" maxlength="60" placeholder="Contoh: Silfa">
+    </label>
+    <label class="field">Jurusan
+      <select id="shareJurusan"></select>
+    </label>
+    <label class="field hidden" id="shareJurusanLainWrap">Tulis nama jurusan
+      <input type="text" id="shareJurusanLain" maxlength="80" placeholder="Contoh: Perpajakan">
+    </label>
+
+    <div class="field">Modul yang dibagikan
+      <small>Kerja kelompok? Centang hanya modul yang kamu kerjakan.</small>
+      <div id="shareModules" class="choice-list"></div>
+    </div>
+
+    <p class="tip">💡 Bagikan ringkasan dan soal latihan saja, jangan salinan utuh isi buku/modul.</p>
+    <div class="msg hidden" id="shareMsg"></div>
+    <div class="modal-actions">
+      <button class="btn" data-close="shareModal">Batal</button>
+      <button class="btn pink" id="shareSend">📤 Bagikan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: BUAT SOAL UNTUK TEMAN ===== -->
+<div class="modal hidden" id="soalModal" role="dialog" aria-modal="true" aria-labelledby="soalTitle">
+  <div class="modal-box">
+    <h2 id="soalTitle">➕ Buat soal untuk teman</h2>
+    <p class="muted">Soalmu ditambahkan untuk teman-teman. Soal yang sudah ada tidak akan berubah.</p>
+
+    <label class="field">Untuk modul
+      <select id="soalModul"></select>
+    </label>
+
+    <div class="field">Jenis soal
+      <div class="seg">
+        <label><input type="radio" name="soalTipe" value="pg" checked> Pilihan ganda</label>
+        <label><input type="radio" name="soalTipe" value="esai"> Esai</label>
+      </div>
+    </div>
+
+    <label class="field">Pertanyaan
+      <textarea id="soalTanya" maxlength="1000" placeholder="Tulis pertanyaannya..."></textarea>
+    </label>
+
+    <div id="pgFields" class="field">Pilihan jawaban
+      <small>Isi pilihannya, lalu tekan bulatan di samping jawaban yang <b>benar</b>.</small>
+      <div id="pgOptions"></div>
+    </div>
+
+    <label class="field hidden" id="esaiFields">Contoh jawaban
+      <textarea id="soalJawabEsai" maxlength="3000" placeholder="Tulis contoh jawaban yang benar..."></textarea>
+    </label>
+
+    <label class="field">Pembahasan <small>(boleh dikosongkan)</small>
+      <textarea id="soalBahas" maxlength="1500" placeholder="Kenapa jawabannya benar?"></textarea>
+    </label>
+
+    <label class="field">Nama kamu
+      <input type="text" id="soalNama" maxlength="60" placeholder="Contoh: Silfa">
+    </label>
+
+    <div class="msg hidden" id="soalMsg"></div>
+    <div class="modal-actions">
+      <button class="btn" data-close="soalModal">Batal</button>
+      <button class="btn pink" id="soalSend">📤 Kirim soal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: CARA PASANG DI IPHONE ===== -->
+<div class="modal hidden" id="iosModal" role="dialog" aria-modal="true" aria-labelledby="iosTitle">
+  <div class="modal-box small">
+    <h2 id="iosTitle">📲 Pasang di iPhone / iPad</h2>
+    <ol class="ios-steps">
+      <li>Pastikan halaman ini dibuka di <b>Safari</b>.</li>
+      <li>Tekan tombol <b>Bagikan</b> <span class="ios-icon" aria-hidden="true">⬆︎</span> (kotak dengan panah ke atas) di bagian bawah layar.</li>
+      <li>Geser ke bawah, lalu tekan <b>Tambahkan ke Layar Utama</b>.</li>
+      <li>Tekan <b>Tambah</b> di pojok kanan atas.</li>
+    </ol>
+    <p class="tip">💡 Materi yang sudah tersimpan di Safari tidak otomatis pindah ke aplikasi. Tekan <b>Simpan ke file</b> dulu, lalu masukkan lagi file-nya di aplikasi.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn pink" data-close="iosModal">Mengerti</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="belajar-ujian.js"></script>
+</body>
+</html>
